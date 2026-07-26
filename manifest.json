@@ -1,0 +1,25 @@
+{
+  "name": "Puzzle Pieces — Jigsaw for Kids",
+  "short_name": "Puzzle Pieces",
+  "description": "A friendly jigsaw puzzle game for kids with real photos",
+  "start_url": "/jigsaw-puzzle/",
+  "scope": "/jigsaw-puzzle/",
+  "display": "standalone",
+  "background_color": "#EAF7FF",
+  "theme_color": "#3AA6E0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
