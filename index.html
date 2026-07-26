@@ -387,67 +387,79 @@
   }
 
   // ---------------------------------------------------------------------
-  // Jigsaw edge geometry
+  // Jigsaw edge geometry — classic tab shape
   //
   // Each internal edge between two neighboring pieces is described by a
   // single shared "sign" (+1 / -1) so that whichever piece's tab bulges
   // outward gets extra canvas padding, and the neighbor simply has a
   // notch carved out of its own flat cell (no padding needed there).
-  // Points are generated in one canonical direction per edge (horizontal
-  // edges left-to-right, vertical edges top-to-bottom); the piece whose
-  // outline needs the edge traversed the other way just walks the same
-  // point list in reverse, guaranteeing the two cut edges match exactly.
+  //
+  // The tab itself is three cubic bezier segments tracing the classic
+  // "narrow neck, round bulb" jigsaw profile (not a simple single bump):
+  // the curve actually swings slightly to the OPPOSITE side right before
+  // flaring out into the bulb, which is what gives real tabs their
+  // pinched neck rather than a smooth blob. TAB_T is the neck half-height
+  // as a fraction of the edge length; the bulb's widest point reaches
+  // 3×TAB_T. This point layout (as fractions of edge length L, in a
+  // canonical along-edge/perpendicular coordinate system) is a
+  // well-established public-domain construction for procedural jigsaw
+  // tabs, used here as three canvas bezierCurveTo calls per edge.
+  //
+  // Points are always generated in one canonical direction per edge
+  // (horizontal edges left-to-right, vertical edges top-to-bottom). A
+  // cubic bezier reverses exactly when its control points are emitted in
+  // reverse order, so the piece whose outline needs the edge the other
+  // way just replays the same three segments back-to-front — guaranteeing
+  // the two neighboring cut edges always match exactly.
   // ---------------------------------------------------------------------
-  const BUMP_SEGMENTS = 14;
+  const TAB_T = 0.10; // neck half-height as a fraction of the edge length
 
-  function bumpOffset(t, sign, bump){
-    // Smooth knob shape: near zero at the corners, peaks at the middle.
-    const d = (t - 0.5) / 0.11;
-    return sign * bump * Math.exp(-(d * d) / 2);
+  function hEdgeAnchors(x1, y, x2, sign, t){
+    const L = x2 - x1;
+    const P = (u, w) => [x1 + L * u, y + sign * w * L];
+    return [
+      P(0, 0), P(0.2, 0), P(0.5, -t), P(0.5 - t, t),
+      P(0.5 - 2 * t, 3 * t), P(0.5 + 2 * t, 3 * t), P(0.5 + t, t),
+      P(0.5, -t), P(0.8, 0), P(1, 0)
+    ];
+  }
+  function vEdgeAnchors(x, y1, y2, sign, t){
+    const L = y2 - y1;
+    const P = (u, w) => [x + sign * w * L, y1 + L * u];
+    return [
+      P(0, 0), P(0.2, 0), P(0.5, -t), P(0.5 - t, t),
+      P(0.5 - 2 * t, 3 * t), P(0.5 + 2 * t, 3 * t), P(0.5 + t, t),
+      P(0.5, -t), P(0.8, 0), P(1, 0)
+    ];
   }
 
-  function hEdgePoints(x1, y, x2, sign, bump){
-    const len = x2 - x1;
-    const pts = [];
-    for (let i = 1; i <= BUMP_SEGMENTS; i++){
-      const t = i / BUMP_SEGMENTS;
-      pts.push([x1 + len * t, y + bumpOffset(t, sign, bump)]);
+  function drawTab(path, pts, forward){
+    // pts = [p0..p9]; on-curve points are p0, p3, p6, p9, the rest are
+    // bezier control points, three "C" segments: (p1,p2,p3) (p4,p5,p6) (p7,p8,p9)
+    if (forward){
+      path.bezierCurveTo(pts[1][0], pts[1][1], pts[2][0], pts[2][1], pts[3][0], pts[3][1]);
+      path.bezierCurveTo(pts[4][0], pts[4][1], pts[5][0], pts[5][1], pts[6][0], pts[6][1]);
+      path.bezierCurveTo(pts[7][0], pts[7][1], pts[8][0], pts[8][1], pts[9][0], pts[9][1]);
+    } else {
+      path.bezierCurveTo(pts[8][0], pts[8][1], pts[7][0], pts[7][1], pts[6][0], pts[6][1]);
+      path.bezierCurveTo(pts[5][0], pts[5][1], pts[4][0], pts[4][1], pts[3][0], pts[3][1]);
+      path.bezierCurveTo(pts[2][0], pts[2][1], pts[1][0], pts[1][1], pts[0][0], pts[0][1]);
     }
-    pts[pts.length - 1] = [x2, y];
-    return pts;
-  }
-  function vEdgePoints(x, y1, y2, sign, bump){
-    const len = y2 - y1;
-    const pts = [];
-    for (let i = 1; i <= BUMP_SEGMENTS; i++){
-      const t = i / BUMP_SEGMENTS;
-      pts.push([x + bumpOffset(t, sign, bump), y1 + len * t]);
-    }
-    pts[pts.length - 1] = [x, y2];
-    return pts;
   }
 
-  function appendH(path, x1, y, x2, sign, forward, bump){
+  function appendH(path, x1, y, x2, sign, forward, t){
     if (sign === 0){ path.lineTo(x2, y); return; }
-    let pts = hEdgePoints(x1, y, x2, sign, bump);
-    if (!forward){
-      pts = pts.slice(0, -1).reverse();
-      pts.push([x1, y]);
-    }
-    pts.forEach(p => path.lineTo(p[0], p[1]));
+    drawTab(path, hEdgeAnchors(x1, y, x2, sign, t), forward);
   }
-  function appendV(path, x, y1, y2, sign, forward, bump){
+  function appendV(path, x, y1, y2, sign, forward, t){
     if (sign === 0){ path.lineTo(x, y2); return; }
-    let pts = vEdgePoints(x, y1, y2, sign, bump);
-    if (!forward){
-      pts = pts.slice(0, -1).reverse();
-      pts.push([x, y1]);
-    }
-    pts.forEach(p => path.lineTo(p[0], p[1]));
+    drawTab(path, vEdgeAnchors(x, y1, y2, sign, t), forward);
   }
 
   function buildPuzzleGeometry(rows, cols, pieceW, pieceH){
-    const bump = Math.min(pieceW, pieceH) * 0.20;
+    // Padding needed for the bulb overshoot beyond the flat cell edge —
+    // the bulb's widest point reaches 3×TAB_T times the edge length.
+    const bump = 3 * TAB_T * Math.min(pieceW, pieceH);
 
     const signH = []; // (rows-1) x cols : edge between row r/r+1 at column c
     for (let r = 0; r < rows - 1; r++){
@@ -471,16 +483,16 @@
         path.moveTo(x0, y0);
         // top
         if (r === 0) path.lineTo(x1, y0);
-        else appendH(path, x0, y0, x1, signH[r - 1][c], true, bump);
+        else appendH(path, x0, y0, x1, signH[r - 1][c], true, TAB_T);
         // right
         if (c === cols - 1) path.lineTo(x1, y1);
-        else appendV(path, x1, y0, y1, signV[r][c], true, bump);
+        else appendV(path, x1, y0, y1, signV[r][c], true, TAB_T);
         // bottom (reverse)
         if (r === rows - 1) path.lineTo(x0, y1);
-        else appendH(path, x0, y1, x1, signH[r][c], false, bump);
+        else appendH(path, x0, y1, x1, signH[r][c], false, TAB_T);
         // left (reverse)
         if (c === 0) path.lineTo(x0, y0);
-        else appendV(path, x0, y0, y1, signV[r][c - 1], false, bump);
+        else appendV(path, x0, y0, y1, signV[r][c - 1], false, TAB_T);
         path.closePath();
 
         const leftPad = (c > 0 && signV[r][c - 1] < 0) ? bump : 0;
