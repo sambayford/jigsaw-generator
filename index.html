@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Puzzle Pieces — A Jigsaw Puzzle for Kids</title>
-<meta name="description" content="A friendly jigsaw puzzle game for kids with real photos.">
+<meta name="description" content="A friendly jigsaw puzzle game for kids with fun cartoon characters.">
 <meta name="theme-color" content="#3AA6E0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -325,6 +325,28 @@
   };
   const STATS_KEY = "jigsaw_kids_stats_v1";
 
+  // Free, no-key, CORS-enabled cartoon character art (api.dicebear.com).
+  // A different style each puzzle keeps it feeling fresh — robots, doodles,
+  // smiley faces, pixel-art explorers, and so on. SVG format is requested
+  // (not PNG) because it has no size cap and rasterizes crisply at
+  // whatever size drawImage draws it at, unlike the 256px-capped raster
+  // formats. backgroundColor is forced because several styles default to
+  // a transparent background, which would leave odd see-through gaps once
+  // cut into puzzle pieces.
+  const CARTOON_STYLES = [
+    "adventurer", "big-smile", "bottts", "croodles", "fun-emoji",
+    "micah", "miniavs", "notionists", "open-peeps", "personas",
+    "pixel-art", "thumbs"
+  ];
+  const BG_PALETTE = ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"];
+
+  function randomCartoonUrl(){
+    const style = CARTOON_STYLES[Math.floor(Math.random() * CARTOON_STYLES.length)];
+    const bg = BG_PALETTE[Math.floor(Math.random() * BG_PALETTE.length)];
+    const seed = Math.random().toString(36).slice(2) + Date.now();
+    return "https://api.dicebear.com/9.x/" + style + "/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=" + bg;
+  }
+
   // ---------------------------------------------------------------------
   // DOM refs
   // ---------------------------------------------------------------------
@@ -634,7 +656,8 @@
   }
 
   // ---------------------------------------------------------------------
-  // Image loading (real photo, with an offline-safe fallback)
+  // Image loading — free cartoon character art from DiceBear's HTTP API
+  // (api.dicebear.com), with an offline-safe fallback if it's unreachable.
   // ---------------------------------------------------------------------
   function loadImage(url, timeoutMs){
     return new Promise((resolve, reject) => {
@@ -686,12 +709,12 @@
   }
 
   // ---------------------------------------------------------------------
-  // Board sizing
+  // Board sizing — square, since the cartoon avatars are all 1:1 art
+  // (stretching a square character into a 4:3 box would distort it).
   // ---------------------------------------------------------------------
   function computeBoardSize(){
-    const w = Math.max(260, Math.min(window.innerWidth - 32, 560));
-    const h = Math.round(w * 0.75);
-    return { w, h };
+    const w = Math.max(260, Math.min(window.innerWidth - 32, 520));
+    return { w, h: w };
   }
 
   // ---------------------------------------------------------------------
@@ -753,10 +776,7 @@
 
     const { rows, cols } = DIFFICULTIES[diffKey];
     const { w: boardW, h: boardH } = computeBoardSize();
-    const seed = Math.random().toString(36).slice(2) + Date.now();
-    const reqW = Math.max(boardW * 2, 640);
-    const reqH = Math.max(boardH * 2, 480);
-    const url = "https://picsum.photos/seed/" + seed + "/" + reqW + "/" + reqH;
+    const url = randomCartoonUrl();
 
     try {
       const img = await loadImage(url);
@@ -764,11 +784,11 @@
       showScreen("game");
     } catch (err){
       try {
-        const fallbackCanvas = generateFallbackImage(reqW, reqH);
+        const fallbackCanvas = generateFallbackImage(boardW * 2, boardH * 2);
         const fallbackImg = await canvasToImage(fallbackCanvas);
         buildPuzzle(fallbackImg, rows, cols, boardW, boardH);
         showScreen("game");
-        showToast("Couldn't fetch an online picture, so here's a colorful one instead!");
+        showToast("Couldn't fetch a cartoon character, so here's a colorful one instead!");
       } catch (err2){
         showScreen("error");
       }
