@@ -1,7 +1,8 @@
 // Puzzle Pieces PWA — Service Worker
 // Caches the app shell only (this file, index.html, manifest, icons).
-// Puzzle photos come live from picsum.photos and are intentionally left
-// uncached here — a new puzzle should always fetch a fresh image.
+// Cartoon character art comes live from api.dicebear.com and is
+// intentionally left uncached here — a new puzzle should always fetch a
+// fresh image.
 
 const CACHE = 'jigsaw-puzzle-cache-v1';
 const SHELL = ['/jigsaw-puzzle/', '/jigsaw-puzzle/index.html', '/jigsaw-puzzle/manifest.json'];
@@ -15,7 +16,7 @@ self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Only handle same-origin GET requests; let cross-origin (picsum, fonts)
+  // Only handle same-origin GET requests; let cross-origin (dicebear, fonts)
   // requests go straight to the network untouched.
   if (url.origin !== self.location.origin || e.request.method !== 'GET') return;
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
