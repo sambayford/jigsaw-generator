@@ -77,6 +77,44 @@
     box-shadow:var(--shadow); font-size:0.9rem; color:var(--ink-soft);
   }
 
+  /* ---------- category picker ---------- */
+  .category-section{ width:100%; max-width:420px; }
+  .section-label{
+    margin:0 0 8px 4px; font-weight:700; color:var(--ink-soft); font-size:0.85rem;
+    text-transform:uppercase; letter-spacing:0.04em;
+  }
+  #category-strip{
+    display:flex; gap:10px; overflow-x:auto; padding:4px 4px 10px;
+    scroll-snap-type:x proximity;
+  }
+  .category-tile{
+    scroll-snap-align:start;
+    flex:0 0 auto;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    width:76px;
+    border:none; background:transparent; cursor:pointer; padding:0;
+  }
+  .category-tile .thumb{
+    width:64px; height:64px; border-radius:16px; background:var(--card);
+    box-shadow:var(--shadow); overflow:hidden; display:flex; align-items:center; justify-content:center;
+    border:3px solid transparent; transition:transform 0.12s ease, border-color 0.12s ease;
+  }
+  .category-tile .thumb img{ width:100%; height:100%; display:block; }
+  .category-tile span{
+    font-size:0.72rem; font-weight:700; color:var(--ink-soft); text-align:center; line-height:1.15;
+  }
+  .category-tile.selected .thumb{
+    border-color:var(--easy);
+    box-shadow:var(--shadow), 0 0 0 2px rgba(6,214,160,0.35);
+    transform:translateY(-2px);
+  }
+  .category-tile.selected span{ color:var(--ink); }
+  .category-tile:active .thumb{ transform:translateY(2px); }
+  .category-tile .thumb.surprise{
+    background:linear-gradient(135deg,#FFD166,#FF6B6B);
+    font-size:1.6rem;
+  }
+
   /* Signature element: buttons shaped like real jigsaw pieces via a knob bump */
   .piece-btn{
     position:relative;
@@ -243,6 +281,12 @@
   <!-- SETUP -->
   <div id="setup-screen" class="screen">
     <div class="stat-pill" id="stat-pill">🏆 0 puzzles solved</div>
+
+    <div class="category-section">
+      <p class="section-label">Pick a character</p>
+      <div id="category-strip"></div>
+    </div>
+
     <div class="diff-grid">
       <button class="piece-btn easy" data-diff="easy">
         Easy <small>9 big pieces — great for little hands</small>
@@ -334,17 +378,72 @@
   // a transparent background, which would leave odd see-through gaps once
   // cut into puzzle pieces.
   const CARTOON_STYLES = [
-    "adventurer", "big-smile", "bottts", "croodles", "fun-emoji",
-    "micah", "miniavs", "notionists", "open-peeps", "personas",
-    "pixel-art", "thumbs"
+    { slug: "adventurer", label: "Explorers" },
+    { slug: "big-smile", label: "Big Smiles" },
+    { slug: "bottts", label: "Robots" },
+    { slug: "croodles", label: "Doodles" },
+    { slug: "fun-emoji", label: "Emoji" },
+    { slug: "micah", label: "Cartoon Faces" },
+    { slug: "miniavs", label: "Mini Avatars" },
+    { slug: "notionists", label: "Sketch Pals" },
+    { slug: "open-peeps", label: "Peeps" },
+    { slug: "personas", label: "Flat Friends" },
+    { slug: "pixel-art", label: "Pixel Art" },
+    { slug: "thumbs", label: "Thumbs Up" }
   ];
   const BG_PALETTE = ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"];
+  const PREVIEW_SEED = "sample"; // fixed seed so each category thumbnail stays recognizable
+
+  function cartoonUrl(style, seed, bg){
+    return "https://api.dicebear.com/9.x/" + style + "/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=" + bg;
+  }
+
+  // selectedStyle: null means "surprise me" — a random style picked fresh
+  // every puzzle. Otherwise it's one of CARTOON_STYLES[i].slug, chosen by
+  // the player on the setup screen.
+  let selectedStyle = null;
 
   function randomCartoonUrl(){
-    const style = CARTOON_STYLES[Math.floor(Math.random() * CARTOON_STYLES.length)];
+    const style = selectedStyle || CARTOON_STYLES[Math.floor(Math.random() * CARTOON_STYLES.length)].slug;
     const bg = BG_PALETTE[Math.floor(Math.random() * BG_PALETTE.length)];
     const seed = Math.random().toString(36).slice(2) + Date.now();
-    return "https://api.dicebear.com/9.x/" + style + "/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=" + bg;
+    return cartoonUrl(style, seed, bg);
+  }
+
+  function buildCategoryStrip(){
+    const strip = document.getElementById("category-strip");
+    strip.innerHTML = "";
+
+    function selectTile(tile, style){
+      strip.querySelectorAll(".category-tile").forEach(t => t.classList.remove("selected"));
+      tile.classList.add("selected");
+      selectedStyle = style;
+    }
+
+    const surpriseTile = document.createElement("button");
+    surpriseTile.className = "category-tile selected";
+    surpriseTile.innerHTML = '<span class="thumb surprise">🎲</span><span>Surprise Me</span>';
+    surpriseTile.addEventListener("click", () => selectTile(surpriseTile, null));
+    strip.appendChild(surpriseTile);
+
+    CARTOON_STYLES.forEach((cat, i) => {
+      const tile = document.createElement("button");
+      tile.className = "category-tile";
+      const bg = BG_PALETTE[i % BG_PALETTE.length];
+      const img = document.createElement("img");
+      img.src = cartoonUrl(cat.slug, PREVIEW_SEED, bg);
+      img.alt = cat.label;
+      img.loading = "lazy";
+      const thumb = document.createElement("span");
+      thumb.className = "thumb";
+      thumb.appendChild(img);
+      const label = document.createElement("span");
+      label.textContent = cat.label;
+      tile.appendChild(thumb);
+      tile.appendChild(label);
+      tile.addEventListener("click", () => selectTile(tile, cat.slug));
+      strip.appendChild(tile);
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -859,6 +958,7 @@
   }, { passive: false });
 
   renderStats();
+  buildCategoryStrip();
   showScreen("setup");
 
   // ---------------------------------------------------------------------
