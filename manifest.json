@@ -1,7 +1,7 @@
 {
   "name": "Puzzle Pieces — Jigsaw for Kids",
   "short_name": "Puzzle Pieces",
-  "description": "A friendly jigsaw puzzle game for kids with pictures of animals, desserts, and fairies",
+  "description": "A friendly jigsaw puzzle game for kids with AI-generated pictures of animals, desserts, and fairies",
   "start_url": "/jigsaw-puzzle/",
   "scope": "/jigsaw-puzzle/",
   "display": "standalone",
