@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Puzzle Pieces — A Jigsaw Puzzle for Kids</title>
-<meta name="description" content="A friendly jigsaw puzzle game for kids with fun cartoon characters.">
+<meta name="description" content="A friendly jigsaw puzzle game for kids with pictures of animals, desserts, and fairies.">
 <meta name="theme-color" content="#3AA6E0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -283,7 +283,7 @@
     <div class="stat-pill" id="stat-pill">🏆 0 puzzles solved</div>
 
     <div class="category-section">
-      <p class="section-label">Pick a character</p>
+      <p class="section-label">Pick a category</p>
       <div id="category-strip"></div>
     </div>
 
@@ -369,55 +369,58 @@
   };
   const STATS_KEY = "jigsaw_kids_stats_v1";
 
-  // Free, no-key, CORS-enabled cartoon character art (api.dicebear.com).
-  // A different style each puzzle keeps it feeling fresh — robots, doodles,
-  // smiley faces, pixel-art explorers, and so on. SVG format is requested
-  // (not PNG) because it has no size cap and rasterizes crisply at
-  // whatever size drawImage draws it at, unlike the 256px-capped raster
-  // formats. backgroundColor is forced because several styles default to
-  // a transparent background, which would leave odd see-through gaps once
-  // cut into puzzle pieces.
-  const CARTOON_STYLES = [
-    { slug: "adventurer", label: "Explorers" },
-    { slug: "big-smile", label: "Big Smiles" },
-    { slug: "bottts", label: "Robots" },
-    { slug: "croodles", label: "Doodles" },
-    { slug: "fun-emoji", label: "Emoji" },
-    { slug: "micah", label: "Cartoon Faces" },
-    { slug: "miniavs", label: "Mini Avatars" },
-    { slug: "notionists", label: "Sketch Pals" },
-    { slug: "open-peeps", label: "Peeps" },
-    { slug: "personas", label: "Flat Friends" },
-    { slug: "pixel-art", label: "Pixel Art" },
-    { slug: "thumbs", label: "Thumbs Up" }
+  // Free, no-key, CORS-enabled real photo search via LoremFlickr
+  // (loremflickr.com), which pulls Creative-Commons-licensed photos from
+  // Flickr by keyword. Each category rotates through several specific
+  // keywords (rather than one generic word) so repeated puzzles in the
+  // same category don't feel too similar. ?lock=<random> busts
+  // LoremFlickr's own caching so the same keyword doesn't always return
+  // the same photo.
+  //
+  // Note for future sessions: unlike the DiceBear avatars this replaced,
+  // these are real, unmoderated-by-us public photos. "animals" and
+  // "desserts" are reliably wholesome; "fairies" is more of a grab bag
+  // (fairy-garden ornaments, costume photos, fairy lights, etc.) since
+  // Flickr's tagging isn't curated for a kids' app. Worth keeping an eye
+  // on if Sam reports anything odd showing up.
+  const CATEGORIES = [
+    { key: "animals", label: "Animals", icon: "🐾",
+      keywords: ["dog","cat","puppy","kitten","rabbit","panda","elephant","lion","tiger","fox","owl","penguin","dolphin","horse","koala","giraffe"] },
+    { key: "desserts", label: "Desserts", icon: "🍰",
+      keywords: ["cake","cupcake","cookie","icecream","donut","chocolate","candy","pie","macaron","pancake","sundae","brownie"] },
+    { key: "fairies", label: "Fairies", icon: "🧚",
+      keywords: ["fairy","fairytale","pixie","fairygarden","enchantedforest","fairylights"] }
   ];
-  const BG_PALETTE = ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf"];
-  const PREVIEW_SEED = "sample"; // fixed seed so each category thumbnail stays recognizable
+  const PREVIEW_LOCK = 1; // fixed lock so each category thumbnail stays recognizable
 
-  function cartoonUrl(style, seed, bg){
-    return "https://api.dicebear.com/9.x/" + style + "/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=" + bg;
+  function photoUrl(keyword, w, h, lock){
+    return "https://loremflickr.com/" + w + "/" + h + "/" + encodeURIComponent(keyword) + "?lock=" + lock;
   }
 
-  // selectedStyle: null means "surprise me" — a random style picked fresh
-  // every puzzle. Otherwise it's one of CARTOON_STYLES[i].slug, chosen by
-  // the player on the setup screen.
-  let selectedStyle = null;
+  // selectedCategoryKey: null means "surprise me" — a random category
+  // (and keyword within it) picked fresh every puzzle. Otherwise it's one
+  // of CATEGORIES[i].key, chosen by the player on the setup screen.
+  let selectedCategoryKey = null;
 
-  function randomCartoonUrl(){
-    const style = selectedStyle || CARTOON_STYLES[Math.floor(Math.random() * CARTOON_STYLES.length)].slug;
-    const bg = BG_PALETTE[Math.floor(Math.random() * BG_PALETTE.length)];
-    const seed = Math.random().toString(36).slice(2) + Date.now();
-    return cartoonUrl(style, seed, bg);
+  function randomPhotoUrl(boardW, boardH){
+    const category = selectedCategoryKey
+      ? CATEGORIES.find(c => c.key === selectedCategoryKey)
+      : CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+    const keyword = category.keywords[Math.floor(Math.random() * category.keywords.length)];
+    const lock = Math.floor(Math.random() * 1e9);
+    const reqW = Math.max(boardW * 2, 640);
+    const reqH = Math.max(boardH * 2, 480);
+    return photoUrl(keyword, reqW, reqH, lock);
   }
 
   function buildCategoryStrip(){
     const strip = document.getElementById("category-strip");
     strip.innerHTML = "";
 
-    function selectTile(tile, style){
+    function selectTile(tile, key){
       strip.querySelectorAll(".category-tile").forEach(t => t.classList.remove("selected"));
       tile.classList.add("selected");
-      selectedStyle = style;
+      selectedCategoryKey = key;
     }
 
     const surpriseTile = document.createElement("button");
@@ -426,22 +429,21 @@
     surpriseTile.addEventListener("click", () => selectTile(surpriseTile, null));
     strip.appendChild(surpriseTile);
 
-    CARTOON_STYLES.forEach((cat, i) => {
+    CATEGORIES.forEach(cat => {
       const tile = document.createElement("button");
       tile.className = "category-tile";
-      const bg = BG_PALETTE[i % BG_PALETTE.length];
       const img = document.createElement("img");
-      img.src = cartoonUrl(cat.slug, PREVIEW_SEED, bg);
+      img.src = photoUrl(cat.keywords[0], 96, 96, PREVIEW_LOCK);
       img.alt = cat.label;
       img.loading = "lazy";
       const thumb = document.createElement("span");
       thumb.className = "thumb";
       thumb.appendChild(img);
       const label = document.createElement("span");
-      label.textContent = cat.label;
+      label.textContent = cat.icon + " " + cat.label;
       tile.appendChild(thumb);
       tile.appendChild(label);
-      tile.addEventListener("click", () => selectTile(tile, cat.slug));
+      tile.addEventListener("click", () => selectTile(tile, cat.key));
       strip.appendChild(tile);
     });
   }
@@ -755,8 +757,13 @@
   }
 
   // ---------------------------------------------------------------------
-  // Image loading — free cartoon character art from DiceBear's HTTP API
-  // (api.dicebear.com), with an offline-safe fallback if it's unreachable.
+  // Image loading — free real photos from LoremFlickr's keyword search,
+  // with an offline-safe fallback if it's unreachable. Deliberately not
+  // setting img.crossOrigin here: we only ever drawImage() this photo
+  // onto canvases that get displayed, never read back out via
+  // getImageData/toDataURL/toBlob, so a "tainted" canvas doesn't matter —
+  // and skipping crossOrigin avoids depending on the photo host sending
+  // CORS headers at all (some free image hosts don't).
   // ---------------------------------------------------------------------
   function loadImage(url, timeoutMs){
     return new Promise((resolve, reject) => {
@@ -767,7 +774,6 @@
         done = true;
         reject(new Error("timeout"));
       }, timeoutMs || 12000);
-      img.crossOrigin = "anonymous";
       img.onload = () => { if (done) return; done = true; clearTimeout(timer); resolve(img); };
       img.onerror = () => { if (done) return; done = true; clearTimeout(timer); reject(new Error("load error")); };
       img.src = url;
@@ -808,12 +814,14 @@
   }
 
   // ---------------------------------------------------------------------
-  // Board sizing — square, since the cartoon avatars are all 1:1 art
-  // (stretching a square character into a 4:3 box would distort it).
+  // Board sizing — 4:3, since these are real photos of varying natural
+  // aspect ratio (unlike the square avatar art this replaced), and 4:3
+  // crops reasonably regardless of the source photo's own proportions.
   // ---------------------------------------------------------------------
   function computeBoardSize(){
-    const w = Math.max(260, Math.min(window.innerWidth - 32, 520));
-    return { w, h: w };
+    const w = Math.max(260, Math.min(window.innerWidth - 32, 560));
+    const h = Math.round(w * 0.75);
+    return { w, h };
   }
 
   // ---------------------------------------------------------------------
@@ -875,7 +883,7 @@
 
     const { rows, cols } = DIFFICULTIES[diffKey];
     const { w: boardW, h: boardH } = computeBoardSize();
-    const url = randomCartoonUrl();
+    const url = randomPhotoUrl(boardW, boardH);
 
     try {
       const img = await loadImage(url);
@@ -887,7 +895,7 @@
         const fallbackImg = await canvasToImage(fallbackCanvas);
         buildPuzzle(fallbackImg, rows, cols, boardW, boardH);
         showScreen("game");
-        showToast("Couldn't fetch a cartoon character, so here's a colorful one instead!");
+        showToast("Couldn't fetch a picture, so here's a colorful one instead!");
       } catch (err2){
         showScreen("error");
       }
