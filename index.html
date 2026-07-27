@@ -812,7 +812,7 @@
         if (done) return;
         done = true;
         reject(new Error("timeout"));
-      }, timeoutMs || 30000);
+      }, timeoutMs || 60000);
       img.onload = () => { if (done) return; done = true; clearTimeout(timer); resolve(img); };
       img.onerror = () => { if (done) return; done = true; clearTimeout(timer); reject(new Error("load error")); };
       img.src = url;
