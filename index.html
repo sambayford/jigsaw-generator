@@ -310,7 +310,7 @@
     <svg class="spinner-piece" viewBox="0 0 64 64">
       <path d="M20 4h14a4 4 0 0 1 4 6.5 5 5 0 1 0 6 8A4 4 0 0 1 50 24v14a4 4 0 0 1-6.5 4 5 5 0 1 0-8 6A4 4 0 0 1 30 52H16a4 4 0 0 1-4-6.5 5 5 0 1 0-6-8A4 4 0 0 1 2 32V18a4 4 0 0 1 6.5-4 5 5 0 1 0 8-6A4 4 0 0 1 20 4Z" fill="#3AA6E0"/>
     </svg>
-    <p>Asking an AI artist to paint something fun…</p>
+    <p id="loading-title">Asking an AI artist to paint something fun…</p>
     <p style="font-size:0.8rem; color:var(--ink-soft); font-weight:600; margin-top:-8px;">This can take a little while — hang tight!</p>
   </div>
 
@@ -468,11 +468,12 @@
     }
 
     const surpriseTile = document.createElement("button");
-    surpriseTile.className = "category-tile selected";
+    surpriseTile.className = "category-tile";
     surpriseTile.innerHTML = '<span class="thumb surprise">🎲</span><span>Surprise Me</span>';
     surpriseTile.addEventListener("click", () => selectTile(surpriseTile, null));
     strip.appendChild(surpriseTile);
 
+    const tilesByKey = {};
     CATEGORIES.forEach(cat => {
       const tile = document.createElement("button");
       tile.className = "category-tile";
@@ -489,7 +490,16 @@
       tile.appendChild(label);
       tile.addEventListener("click", () => selectTile(tile, cat.key));
       strip.appendChild(tile);
+      tilesByKey[cat.key] = tile;
     });
+
+    // Reflect whatever selectedCategoryKey already is (e.g. restored from
+    // a saved in-progress puzzle) rather than always defaulting to
+    // Surprise Me — this only matters cosmetically once the player
+    // navigates back to this screen, since a restore skips straight to
+    // the game screen.
+    (selectedCategoryKey && tilesByKey[selectedCategoryKey] ? tilesByKey[selectedCategoryKey] : surpriseTile)
+      .classList.add("selected");
   }
 
   // ---------------------------------------------------------------------
@@ -623,22 +633,31 @@
     drawTab(path, vEdgeAnchors(x, y1, y2, sign, t), forward);
   }
 
-  function buildPuzzleGeometry(rows, cols, pieceW, pieceH){
+  function buildPuzzleGeometry(rows, cols, pieceW, pieceH, savedSignH, savedSignV){
     // Padding needed for the bulb overshoot beyond the flat cell edge —
     // the bulb's widest point reaches 3×TAB_T times the edge length.
     const bump = 3 * TAB_T * Math.min(pieceW, pieceH);
 
-    const signH = []; // (rows-1) x cols : edge between row r/r+1 at column c
-    for (let r = 0; r < rows - 1; r++){
-      const row = [];
-      for (let c = 0; c < cols; c++) row.push(Math.random() < 0.5 ? -1 : 1);
-      signH.push(row);
-    }
-    const signV = []; // rows x (cols-1) : edge between col c/c+1 at row r
-    for (let r = 0; r < rows; r++){
-      const row = [];
-      for (let c = 0; c < cols - 1; c++) row.push(Math.random() < 0.5 ? -1 : 1);
-      signV.push(row);
+    let signH, signV;
+    if (savedSignH && savedSignV){
+      // Restoring an in-progress puzzle: reuse the exact same tab layout
+      // so the regenerated pieces match the ones the player was already
+      // dragging around.
+      signH = savedSignH;
+      signV = savedSignV;
+    } else {
+      signH = []; // (rows-1) x cols : edge between row r/r+1 at column c
+      for (let r = 0; r < rows - 1; r++){
+        const row = [];
+        for (let c = 0; c < cols; c++) row.push(Math.random() < 0.5 ? -1 : 1);
+        signH.push(row);
+      }
+      signV = []; // rows x (cols-1) : edge between col c/c+1 at row r
+      for (let r = 0; r < rows; r++){
+        const row = [];
+        for (let c = 0; c < cols - 1; c++) row.push(Math.random() < 0.5 ? -1 : 1);
+        signV.push(row);
+      }
     }
 
     const pieces = [];
@@ -672,10 +691,10 @@
           minY: y0 - topPad, maxY: y1 + bottomPad
         };
 
-        pieces.push({ r, c, path, bbox, locked:false });
+        pieces.push({ r, c, key: r + "_" + c, path, bbox, locked:false });
       }
     }
-    return pieces;
+    return { pieces, signH, signV };
   }
 
   // ---------------------------------------------------------------------
@@ -766,6 +785,7 @@
         const tolerance = Math.max(piece.w, piece.h) * 0.30 + 8;
 
         if (dist < tolerance) snapPiece(piece);
+        else saveProgress();
       }
       canvas.addEventListener("pointermove", onMove);
       canvas.addEventListener("pointerup", onUp);
@@ -789,6 +809,7 @@
 
     state.placed++;
     updateHud();
+    saveProgress();
     if (state.placed >= state.total){
       setTimeout(celebrate, 400);
     }
@@ -798,6 +819,58 @@
     if (!state) return;
     hudCount.textContent = state.placed + " / " + state.total;
     progressFill.style.width = Math.round((state.placed / state.total) * 100) + "%";
+  }
+
+  // ---------------------------------------------------------------------
+  // Progress persistence — saves the in-progress puzzle (not just the
+  // lifetime stats counter, which already survives in localStorage on its
+  // own) so a page reload never loses a puzzle the player is mid-way
+  // through. This matters most for the cache-busting reload at the bottom
+  // of this file, but also covers a plain manual browser refresh or the
+  // OS reloading a backgrounded tab.
+  //
+  // What's saved: the category/difficulty, the exact generated-image URL
+  // (same seed => Pollinations returns the same picture), the signH/signV
+  // tab-layout arrays (so regenerated piece shapes match exactly), and
+  // per-piece status — locked (on the board), loose (dropped somewhere,
+  // with its position relative to the board), or still in the tray (with
+  // its order). Re-deriving piece geometry/art from these means we never
+  // need to serialize actual pixel data.
+  // ---------------------------------------------------------------------
+  const PROGRESS_KEY = "jigsaw_progress_v1";
+
+  function saveProgress(){
+    if (!state) return;
+    try {
+      const boardRect = boardEl.getBoundingClientRect();
+      const piecesSnapshot = state.pieces.map(p => {
+        if (p.locked) return { key: p.key, status: "locked" };
+        if (p.canvas.parentElement === trayEl){
+          const order = Array.prototype.indexOf.call(trayEl.children, p.canvas);
+          return { key: p.key, status: "tray", order };
+        }
+        const left = parseFloat(p.canvas.style.left) || 0;
+        const top = parseFloat(p.canvas.style.top) || 0;
+        return { key: p.key, status: "loose", x: left - boardRect.left, y: top - boardRect.top };
+      });
+
+      const snapshot = {
+        v: 1,
+        category: selectedCategoryKey,
+        difficulty: currentDifficulty,
+        rows: state.rows, cols: state.cols,
+        boardW: state.boardW, boardH: state.boardH,
+        imageUrl: state.imageUrl,
+        signH: state.signH, signV: state.signV,
+        ghostHidden: boardEl.classList.contains("hide-ghost"),
+        pieces: piecesSnapshot
+      };
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(snapshot));
+    } catch(e){ /* localStorage unavailable (private mode, quota) — skip silently */ }
+  }
+
+  function clearProgress(){
+    try { localStorage.removeItem(PROGRESS_KEY); } catch(e){}
   }
 
   // ---------------------------------------------------------------------
@@ -833,7 +906,7 @@
   // ---------------------------------------------------------------------
   // Puzzle assembly
   // ---------------------------------------------------------------------
-  function buildPuzzle(img, rows, cols, boardW, boardH){
+  function buildPuzzle(img, rows, cols, boardW, boardH, imageUrl, restoreData){
     boardEl.style.width = boardW + "px";
     boardEl.style.height = boardH + "px";
     ghostCanvas.width = boardW;
@@ -853,28 +926,72 @@
       "repeating-linear-gradient(to right, rgba(27,42,74,0.18) 0 1px, transparent 1px " + pieceW + "px)," +
       "repeating-linear-gradient(to bottom, rgba(27,42,74,0.18) 0 1px, transparent 1px " + pieceH + "px)";
 
-    const pieces = buildPuzzleGeometry(rows, cols, pieceW, pieceH);
+    const geometry = buildPuzzleGeometry(rows, cols, pieceW, pieceH,
+      restoreData && restoreData.signH, restoreData && restoreData.signV);
+    const pieces = geometry.pieces;
     pieces.forEach(p => renderPieceCanvas(p, fullCanvas));
 
-    // shuffle order for the tray so pieces don't line up in solved order
-    for (let i = pieces.length - 1; i > 0; i--){
-      const j = Math.floor(Math.random() * (i + 1));
-      [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
-    }
-
     state = {
-      rows, cols, boardW, boardH, pieceW, pieceH,
+      rows, cols, boardW, boardH, pieceW, pieceH, imageUrl,
+      signH: geometry.signH, signV: geometry.signV,
       pieces, placed: 0, total: rows * cols, zTop: 10
     };
 
-    pieces.forEach(p => {
-      makeDraggable(p);
-      trayEl.appendChild(p.canvas);
-    });
+    if (restoreData){
+      const byKey = {};
+      pieces.forEach(p => { byKey[p.key] = p; });
+      const boardRect = boardEl.getBoundingClientRect();
+
+      restoreData.pieces.forEach(sp => {
+        const piece = byKey[sp.key];
+        if (!piece) return;
+        makeDraggable(piece);
+        if (sp.status === "locked"){
+          piece.locked = true;
+          piece.canvas.style.position = "absolute";
+          piece.canvas.style.left = piece.bbox.minX + "px";
+          piece.canvas.style.top = piece.bbox.minY + "px";
+          piece.canvas.style.zIndex = "1";
+          piece.canvas.classList.add("locked");
+          boardEl.appendChild(piece.canvas);
+          state.placed++;
+        } else if (sp.status === "loose"){
+          piece.canvas.style.position = "fixed";
+          piece.canvas.style.margin = "0";
+          piece.canvas.style.left = (boardRect.left + sp.x) + "px";
+          piece.canvas.style.top = (boardRect.top + sp.y) + "px";
+          piece.canvas.style.zIndex = String(++state.zTop);
+          looseLayer.appendChild(piece.canvas);
+        }
+        // "tray" pieces are appended below, in saved order
+      });
+      restoreData.pieces
+        .filter(sp => sp.status === "tray")
+        .sort((a, b) => a.order - b.order)
+        .forEach(sp => {
+          const piece = byKey[sp.key];
+          if (piece) trayEl.appendChild(piece.canvas);
+        });
+
+      boardEl.classList.toggle("hide-ghost", !!restoreData.ghostHidden);
+    } else {
+      // fresh puzzle: shuffle order for the tray so pieces don't line up
+      // in solved order
+      for (let i = pieces.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+      }
+      pieces.forEach(p => {
+        makeDraggable(p);
+        trayEl.appendChild(p.canvas);
+      });
+      boardEl.classList.remove("hide-ghost");
+    }
 
     updateHud();
-    boardEl.classList.remove("hide-ghost");
-    document.getElementById("toggle-ghost-btn").textContent = "🙈 Hide picture";
+    document.getElementById("toggle-ghost-btn").textContent =
+      boardEl.classList.contains("hide-ghost") ? "👀 Show picture" : "🙈 Hide picture";
+    saveProgress();
   }
 
   // ---------------------------------------------------------------------
@@ -893,7 +1010,7 @@
 
     try {
       const img = await loadImage(url);
-      buildPuzzle(img, rows, cols, boardW, boardH);
+      buildPuzzle(img, rows, cols, boardW, boardH, url);
       showScreen("game");
     } catch (err){
       showScreen("error");
@@ -901,6 +1018,7 @@
   }
 
   function celebrate(){
+    clearProgress();
     const label = DIFFICULTIES[currentDifficulty].label;
     document.getElementById("celebrate-sub").textContent =
       label + " puzzle complete — " + state.total + " pieces!";
@@ -941,17 +1059,20 @@
   document.getElementById("retry-btn").addEventListener("click", () => startPuzzle(currentDifficulty));
   document.getElementById("new-puzzle-btn").addEventListener("click", () => startPuzzle(currentDifficulty));
   document.getElementById("change-diff-btn").addEventListener("click", () => {
+    clearProgress();
     cleanupGame();
     showScreen("setup");
   });
   document.getElementById("play-again-btn").addEventListener("click", () => startPuzzle(currentDifficulty));
   document.getElementById("celebrate-levels-btn").addEventListener("click", () => {
+    clearProgress();
     cleanupGame();
     showScreen("setup");
   });
   document.getElementById("toggle-ghost-btn").addEventListener("click", (e) => {
     const hidden = boardEl.classList.toggle("hide-ghost");
     e.target.textContent = hidden ? "👀 Show picture" : "🙈 Hide picture";
+    saveProgress();
   });
 
   // Prevent the iOS double-tap-to-zoom gesture even with user-scalable=no,
@@ -963,21 +1084,74 @@
     lastTouchEnd = now;
   }, { passive: false });
 
-  renderStats();
-  buildCategoryStrip();
-  showScreen("setup");
+  // Safety-net saves: covers the moment right before our own cache-busting
+  // reload below, plus a user manually refreshing, backgrounding the tab,
+  // or the OS reclaiming/reloading it. saveProgress() itself is a no-op
+  // when there's no active puzzle (state is null), so this is always safe
+  // to call unconditionally.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveProgress();
+  });
+  window.addEventListener("pagehide", () => saveProgress());
+
+  // ---------------------------------------------------------------------
+  // Startup: restore an in-progress puzzle if one was saved, otherwise
+  // show the normal setup screen. See saveProgress()/clearProgress() above
+  // for what gets persisted and when.
+  // ---------------------------------------------------------------------
+  async function initApp(){
+    renderStats();
+
+    let saved = null;
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY);
+      if (raw) saved = JSON.parse(raw);
+    } catch(e){ saved = null; }
+
+    const savedLooksValid = saved && saved.imageUrl && saved.rows && saved.cols &&
+      saved.boardW && saved.boardH && saved.signH && saved.signV && Array.isArray(saved.pieces);
+
+    if (savedLooksValid){
+      selectedCategoryKey = saved.category || null;
+      currentDifficulty = saved.difficulty || "easy";
+      buildCategoryStrip();
+      document.getElementById("loading-title").textContent = "Picking up where you left off…";
+      showScreen("loading");
+      try {
+        const img = await loadImage(saved.imageUrl);
+        buildPuzzle(img, saved.rows, saved.cols, saved.boardW, saved.boardH, saved.imageUrl, saved);
+        showScreen("game");
+        return;
+      } catch(err){
+        // Saved image no longer loads (e.g. expired) — discard and fall
+        // through to a normal setup screen below.
+        clearProgress();
+      }
+    } else {
+      buildCategoryStrip();
+    }
+    showScreen("setup");
+  }
+  initApp();
 
   // ---------------------------------------------------------------------
   // Cache-busting refresh: ensure the latest deployed version is always
   // loaded. Guarded by sessionStorage so it only runs once per tab
   // session, not on every reload it itself triggers. Kept in sync with
-  // the same pattern used in fruit-cascade / gen-golf.
+  // the same pattern used in fruit-cascade / gen-golf. Progress is saved
+  // first so an in-progress puzzle survives the reload (see saveProgress
+  // above) — though in practice this particular reload always happens at
+  // the very start of a tab session, before any puzzle exists yet; the
+  // save here is a defensive no-op in that case, and initApp() above is
+  // what actually restores anything on the *next* load.
   // ---------------------------------------------------------------------
   (function refreshCache(){
     try {
       if (sessionStorage.getItem("jigsaw_cache_refreshed")) return;
       sessionStorage.setItem("jigsaw_cache_refreshed", "1");
     } catch(e){ return; }
+
+    saveProgress();
 
     const tasks = [];
     if ("caches" in window){
