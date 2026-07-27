@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Puzzle Pieces — A Jigsaw Puzzle for Kids</title>
-<meta name="description" content="A friendly jigsaw puzzle game for kids with pictures of animals, desserts, and fairies.">
+<meta name="description" content="A friendly jigsaw puzzle game for kids with AI-generated pictures of animals, desserts, and fairies.">
 <meta name="theme-color" content="#3AA6E0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -305,13 +305,13 @@
     <svg class="spinner-piece" viewBox="0 0 64 64">
       <path d="M20 4h14a4 4 0 0 1 4 6.5 5 5 0 1 0 6 8A4 4 0 0 1 50 24v14a4 4 0 0 1-6.5 4 5 5 0 1 0-8 6A4 4 0 0 1 30 52H16a4 4 0 0 1-4-6.5 5 5 0 1 0-6-8A4 4 0 0 1 2 32V18a4 4 0 0 1 6.5-4 5 5 0 1 0 8-6A4 4 0 0 1 20 4Z" fill="#3AA6E0"/>
     </svg>
-    <p>Fetching a fun picture…</p>
+    <p>Asking an AI artist to paint something fun…</p>
   </div>
 
   <!-- ERROR -->
   <div id="error-screen" class="screen hidden">
     <h2 class="display">Hmm, that didn't work 😕</h2>
-    <p>We couldn't reach the picture library. Check your connection and try again.</p>
+    <p>We couldn't reach the AI picture generator. Check your connection and try again.</p>
     <button class="retry-btn" id="retry-btn">Try Again</button>
   </div>
 
@@ -369,48 +369,86 @@
   };
   const STATS_KEY = "jigsaw_kids_stats_v1";
 
-  // Free, no-key, CORS-enabled real photo search via LoremFlickr
-  // (loremflickr.com), which pulls Creative-Commons-licensed photos from
-  // Flickr by keyword. Each category rotates through several specific
-  // keywords (rather than one generic word) so repeated puzzles in the
-  // same category don't feel too similar. ?lock=<random> busts
-  // LoremFlickr's own caching so the same keyword doesn't always return
-  // the same photo.
+  // Free, no-key AI image generation via Pollinations.ai
+  // (image.pollinations.ai/prompt/<prompt>). Unlike the LoremFlickr photo
+  // search this replaced, WE control every prompt — no unmoderated public
+  // photos — plus the API's own safe=true NSFW filter as a second layer
+  // (it errors out rather than returning flagged content, which our
+  // existing fallback handles gracefully). Each category rotates through
+  // several specific prompts (rather than one generic one) for variety,
+  // and STYLE_SUFFIX keeps every generation in the same cheerful
+  // storybook-illustration look regardless of subject. A random seed is
+  // appended per puzzle so the same prompt doesn't return the same image
+  // twice.
   //
-  // Note for future sessions: unlike the DiceBear avatars this replaced,
-  // these are real, unmoderated-by-us public photos. "animals" and
-  // "desserts" are reliably wholesome; "fairies" is more of a grab bag
-  // (fairy-garden ornaments, costume photos, fairy lights, etc.) since
-  // Flickr's tagging isn't curated for a kids' app. Worth keeping an eye
-  // on if Sam reports anything odd showing up.
+  // Anonymous (no-signup) usage notes: images may carry a small
+  // Pollinations watermark (nologo requires a free account — harmless to
+  // still request it, just won't take effect for us), and the anonymous
+  // rate limit is roughly one request per 15s. Generation itself is also
+  // slower than a plain image lookup, so loadImage's timeout is longer
+  // here than it was for LoremFlickr/DiceBear (see loadImage below).
+  const STYLE_SUFFIX = ", colorful children's book illustration, cheerful, simple clean background, digital art";
   const CATEGORIES = [
-    { key: "animals", label: "Animals", icon: "🐾",
-      keywords: ["dog","cat","puppy","kitten","rabbit","panda","elephant","lion","tiger","fox","owl","penguin","dolphin","horse","koala","giraffe"] },
-    { key: "desserts", label: "Desserts", icon: "🍰",
-      keywords: ["cake","cupcake","cookie","icecream","donut","chocolate","candy","pie","macaron","pancake","sundae","brownie"] },
-    { key: "fairies", label: "Fairies", icon: "🧚",
-      keywords: ["fairy","fairytale","pixie","fairygarden","enchantedforest","fairylights"] }
+    { key: "animals", label: "Animals", icon: "🐾", prompts: [
+      "a cute fluffy puppy playing in a park",
+      "a happy baby elephant",
+      "a fluffy bunny in a meadow",
+      "a playful panda cub",
+      "a colorful parrot on a branch",
+      "a curious kitten with a ball of yarn",
+      "a baby lion cub in tall grass",
+      "a friendly dolphin jumping over waves",
+      "a fox sitting in an autumn forest",
+      "a baby giraffe under a tree",
+      "a penguin family on ice",
+      "a koala hugging a tree branch"
+    ] },
+    { key: "desserts", label: "Desserts", icon: "🍰", prompts: [
+      "a big birthday cake with candles and sprinkles",
+      "a stack of pancakes with syrup and berries",
+      "an ice cream sundae with rainbow sprinkles",
+      "a plate of colorful frosted cupcakes",
+      "a rainbow layer cake",
+      "a donut with pink frosting and sprinkles",
+      "a bowl of colorful candy",
+      "a giant chocolate chip cookie",
+      "a fruit tart with strawberries",
+      "a slice of pie with whipped cream"
+    ] },
+    { key: "fairies", label: "Fairies", icon: "🧚", prompts: [
+      "a cute fairy with sparkly wings in an enchanted forest",
+      "a tiny fairy garden with mushrooms and fireflies",
+      "a magical fairy castle in the clouds",
+      "a fairy sitting on a giant flower",
+      "a fairy with a wand casting sparkles",
+      "a woodland fairy with butterfly wings",
+      "a fairy tea party with tiny cups",
+      "a fairy flying among the stars"
+    ] }
   ];
-  const PREVIEW_LOCK = 1; // fixed lock so each category thumbnail stays recognizable
+  const PREVIEW_SEED = 1; // fixed seed so each category thumbnail stays recognizable
 
-  function photoUrl(keyword, w, h, lock){
-    return "https://loremflickr.com/" + w + "/" + h + "/" + encodeURIComponent(keyword) + "?lock=" + lock;
+  function pollinationsUrl(prompt, w, h, seed){
+    const fullPrompt = prompt + STYLE_SUFFIX;
+    return "https://image.pollinations.ai/prompt/" + encodeURIComponent(fullPrompt) +
+      "?width=" + w + "&height=" + h + "&seed=" + seed +
+      "&model=flux&safe=true&nologo=true&referrer=sambayford-jigsaw-puzzle";
   }
 
   // selectedCategoryKey: null means "surprise me" — a random category
-  // (and keyword within it) picked fresh every puzzle. Otherwise it's one
+  // (and prompt within it) picked fresh every puzzle. Otherwise it's one
   // of CATEGORIES[i].key, chosen by the player on the setup screen.
   let selectedCategoryKey = null;
 
-  function randomPhotoUrl(boardW, boardH){
+  function randomGeneratedImageUrl(boardW, boardH){
     const category = selectedCategoryKey
       ? CATEGORIES.find(c => c.key === selectedCategoryKey)
       : CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-    const keyword = category.keywords[Math.floor(Math.random() * category.keywords.length)];
-    const lock = Math.floor(Math.random() * 1e9);
+    const prompt = category.prompts[Math.floor(Math.random() * category.prompts.length)];
+    const seed = Math.floor(Math.random() * 1e9);
     const reqW = Math.max(boardW * 2, 640);
     const reqH = Math.max(boardH * 2, 480);
-    return photoUrl(keyword, reqW, reqH, lock);
+    return pollinationsUrl(prompt, reqW, reqH, seed);
   }
 
   function buildCategoryStrip(){
@@ -433,7 +471,7 @@
       const tile = document.createElement("button");
       tile.className = "category-tile";
       const img = document.createElement("img");
-      img.src = photoUrl(cat.keywords[0], 96, 96, PREVIEW_LOCK);
+      img.src = pollinationsUrl(cat.prompts[0], 96, 96, PREVIEW_SEED);
       img.alt = cat.label;
       img.loading = "lazy";
       const thumb = document.createElement("span");
@@ -757,13 +795,14 @@
   }
 
   // ---------------------------------------------------------------------
-  // Image loading — free real photos from LoremFlickr's keyword search,
-  // with an offline-safe fallback if it's unreachable. Deliberately not
-  // setting img.crossOrigin here: we only ever drawImage() this photo
-  // onto canvases that get displayed, never read back out via
+  // Image loading — AI-generated pictures from Pollinations.ai, with an
+  // offline-safe fallback if it's unreachable. Deliberately not setting
+  // img.crossOrigin here: we only ever drawImage() this image onto
+  // canvases that get displayed, never read back out via
   // getImageData/toDataURL/toBlob, so a "tainted" canvas doesn't matter —
-  // and skipping crossOrigin avoids depending on the photo host sending
-  // CORS headers at all (some free image hosts don't).
+  // and skipping crossOrigin avoids depending on the image host sending
+  // CORS headers at all. Default timeout is longer than a plain image
+  // lookup would need, since actual AI generation takes a few seconds.
   // ---------------------------------------------------------------------
   function loadImage(url, timeoutMs){
     return new Promise((resolve, reject) => {
@@ -773,7 +812,7 @@
         if (done) return;
         done = true;
         reject(new Error("timeout"));
-      }, timeoutMs || 12000);
+      }, timeoutMs || 30000);
       img.onload = () => { if (done) return; done = true; clearTimeout(timer); resolve(img); };
       img.onerror = () => { if (done) return; done = true; clearTimeout(timer); reject(new Error("load error")); };
       img.src = url;
@@ -814,9 +853,9 @@
   }
 
   // ---------------------------------------------------------------------
-  // Board sizing — 4:3, since these are real photos of varying natural
-  // aspect ratio (unlike the square avatar art this replaced), and 4:3
-  // crops reasonably regardless of the source photo's own proportions.
+  // Board sizing — 4:3. Pollinations.ai generates to whatever width/height
+  // we request, so no particular aspect ratio is forced by the source;
+  // 4:3 just reads nicely as a puzzle board.
   // ---------------------------------------------------------------------
   function computeBoardSize(){
     const w = Math.max(260, Math.min(window.innerWidth - 32, 560));
@@ -883,7 +922,7 @@
 
     const { rows, cols } = DIFFICULTIES[diffKey];
     const { w: boardW, h: boardH } = computeBoardSize();
-    const url = randomPhotoUrl(boardW, boardH);
+    const url = randomGeneratedImageUrl(boardW, boardH);
 
     try {
       const img = await loadImage(url);
@@ -895,7 +934,7 @@
         const fallbackImg = await canvasToImage(fallbackCanvas);
         buildPuzzle(fallbackImg, rows, cols, boardW, boardH);
         showScreen("game");
-        showToast("Couldn't fetch a picture, so here's a colorful one instead!");
+        showToast("Couldn't reach the AI artist, so here's a colorful one instead!");
       } catch (err2){
         showScreen("error");
       }
