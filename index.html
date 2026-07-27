@@ -255,12 +255,17 @@
 
   #toast{
     position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom));
-    transform:translate(-50%, 140%);
+    transform:translateX(-50%) translateY(8px);
+    opacity:0; visibility:hidden;
     background:var(--ink); color:#fff; font-weight:600; font-size:0.85rem;
     padding:10px 16px; border-radius:12px; max-width:88vw; text-align:center;
-    transition:transform 0.25s ease; z-index:5000; box-shadow:0 6px 18px rgba(0,0,0,0.25);
+    transition:opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s;
+    z-index:5000; box-shadow:0 6px 18px rgba(0,0,0,0.25);
   }
-  #toast.show{ transform:translate(-50%, 0); }
+  #toast.show{
+    opacity:1; visibility:visible; transform:translateX(-50%) translateY(0);
+    transition:opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0s;
+  }
 
   #loose-layer{ position:fixed; inset:0; pointer-events:none; z-index:200; }
   #loose-layer .piece-canvas{ pointer-events:auto; }
@@ -306,6 +311,7 @@
       <path d="M20 4h14a4 4 0 0 1 4 6.5 5 5 0 1 0 6 8A4 4 0 0 1 50 24v14a4 4 0 0 1-6.5 4 5 5 0 1 0-8 6A4 4 0 0 1 30 52H16a4 4 0 0 1-4-6.5 5 5 0 1 0-6-8A4 4 0 0 1 2 32V18a4 4 0 0 1 6.5-4 5 5 0 1 0 8-6A4 4 0 0 1 20 4Z" fill="#3AA6E0"/>
     </svg>
     <p>Asking an AI artist to paint something fun…</p>
+    <p style="font-size:0.8rem; color:var(--ink-soft); font-weight:600; margin-top:-8px;">This can take a little while — hang tight!</p>
   </div>
 
   <!-- ERROR -->
@@ -795,61 +801,22 @@
   }
 
   // ---------------------------------------------------------------------
-  // Image loading — AI-generated pictures from Pollinations.ai, with an
-  // offline-safe fallback if it's unreachable. Deliberately not setting
-  // img.crossOrigin here: we only ever drawImage() this image onto
-  // canvases that get displayed, never read back out via
-  // getImageData/toDataURL/toBlob, so a "tainted" canvas doesn't matter —
-  // and skipping crossOrigin avoids depending on the image host sending
-  // CORS headers at all. Default timeout is longer than a plain image
-  // lookup would need, since actual AI generation takes a few seconds.
+  // Image loading — AI-generated pictures from Pollinations.ai. No
+  // timeout: generation can genuinely take a while, and the request is to
+  // always wait for the real image rather than falling back to a
+  // generated placeholder. Deliberately not setting img.crossOrigin here:
+  // we only ever drawImage() this image onto canvases that get displayed,
+  // never read back out via getImageData/toDataURL/toBlob, so a "tainted"
+  // canvas doesn't matter — and skipping crossOrigin avoids depending on
+  // the image host sending CORS headers at all.
   // ---------------------------------------------------------------------
-  function loadImage(url, timeoutMs){
+  function loadImage(url){
     return new Promise((resolve, reject) => {
       const img = new Image();
-      let done = false;
-      const timer = setTimeout(() => {
-        if (done) return;
-        done = true;
-        reject(new Error("timeout"));
-      }, timeoutMs || 60000);
-      img.onload = () => { if (done) return; done = true; clearTimeout(timer); resolve(img); };
-      img.onerror = () => { if (done) return; done = true; clearTimeout(timer); reject(new Error("load error")); };
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("load error"));
       img.src = url;
     });
-  }
-
-  function canvasToImage(canvas){
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.src = canvas.toDataURL("image/png");
-    });
-  }
-
-  function generateFallbackImage(w, h){
-    const cvs = document.createElement("canvas");
-    cvs.width = w; cvs.height = h;
-    const ctx = cvs.getContext("2d");
-    const palettes = [
-      ["#FF9A8B","#FF6A88","#FF99AC"],
-      ["#43CBFF","#9708CC"],
-      ["#FDC830","#F37335"],
-      ["#43E97B","#38F9D7"],
-      ["#A18CD1","#FBC2EB"]
-    ];
-    const pal = palettes[Math.floor(Math.random() * palettes.length)];
-    const grad = ctx.createLinearGradient(0, 0, w, h);
-    pal.forEach((color, i) => grad.addColorStop(i / (pal.length - 1 || 1), color));
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 14; i++){
-      ctx.beginPath();
-      ctx.arc(Math.random() * w, Math.random() * h, 18 + Math.random() * (w * 0.12), 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,255,255," + (0.05 + Math.random() * 0.12) + ")";
-      ctx.fill();
-    }
-    return cvs;
   }
 
   // ---------------------------------------------------------------------
@@ -929,15 +896,7 @@
       buildPuzzle(img, rows, cols, boardW, boardH);
       showScreen("game");
     } catch (err){
-      try {
-        const fallbackCanvas = generateFallbackImage(boardW * 2, boardH * 2);
-        const fallbackImg = await canvasToImage(fallbackCanvas);
-        buildPuzzle(fallbackImg, rows, cols, boardW, boardH);
-        showScreen("game");
-        showToast("Couldn't reach the AI artist, so here's a colorful one instead!");
-      } catch (err2){
-        showScreen("error");
-      }
+      showScreen("error");
     }
   }
 
