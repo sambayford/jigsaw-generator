@@ -4,8 +4,8 @@
 // are intentionally left uncached here — a new puzzle should always
 // generate a fresh image.
 
-const CACHE = 'jigsaw-puzzle-cache-v1';
-const SHELL = ['/jigsaw-puzzle/', '/jigsaw-puzzle/index.html', '/jigsaw-puzzle/manifest.json'];
+const CACHE = 'jigsaw-generator-cache-v1';
+const SHELL = ['/jigsaw-generator/', '/jigsaw-generator/index.html', '/jigsaw-generator/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
