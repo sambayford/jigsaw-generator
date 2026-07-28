@@ -303,6 +303,11 @@
     </div>
 
     <div class="carousel-section">
+      <p class="section-label">What style?</p>
+      <div id="style-carousel" class="carousel-strip"></div>
+    </div>
+
+    <div class="carousel-section">
       <p class="section-label">How big?</p>
       <div id="size-carousel" class="carousel-strip"></div>
     </div>
@@ -387,12 +392,11 @@
   // unmoderated public photos — plus the API's own safe=true NSFW filter
   // as a second layer (it errors out rather than returning flagged
   // content). Rather than fixed pre-made prompts, the player builds their
-  // own combination from three independent carousels — WHO (OBJECTS),
-  // WHERE (PLACES), and SIZE — and the final prompt is just
-  // "<object phrase> <place phrase>" + STYLE_SUFFIX, which keeps every
-  // generation in the same cheerful storybook-illustration look
-  // regardless of subject. A random seed is appended per puzzle so the
-  // same combination doesn't return the same image twice.
+  // own combination from four independent carousels — WHO (OBJECTS),
+  // WHERE (PLACES), STYLE (STYLES), and SIZE — and the final prompt is
+  // just "<object phrase> <place phrase>" + the chosen style's suffix. A
+  // random seed is appended per puzzle so the same combination doesn't
+  // return the same image twice.
   //
   // Anonymous (no-signup) usage notes: images may carry a small
   // Pollinations watermark (nologo requires a free account — harmless to
@@ -400,7 +404,6 @@
   // rate limit is roughly one request per 15s. Generation itself is also
   // slower than a plain image lookup — loadImage() has no timeout, it
   // just waits (see loadImage below).
-  const STYLE_SUFFIX = ", colorful children's book illustration, cheerful, simple clean background, digital art";
 
   // "animal" is a wildcard entry within the WHO carousel — rather than one
   // fixed prompt, it picks randomly from this pool each time so "Animal"
@@ -444,8 +447,29 @@
     { key: "circus", emoji: "🎪", label: "Circus", phrase: "at a fun circus" }
   ];
 
-  function pollinationsUrl(prompt, w, h, seed){
-    const fullPrompt = prompt + STYLE_SUFFIX;
+  // Each style's suffix is appended to the "<object> <place>" prompt.
+  // "cartoon" is the concrete default (not "surprise") since it's the
+  // safest, most reliably kid-appropriate look and matches what this app
+  // always generated before styles existed — a player who doesn't touch
+  // this carousel gets the same result as before.
+  const STYLES = [
+    { key: "cartoon", emoji: "🎨", label: "Cartoon",
+      suffix: ", colorful children's book illustration, cheerful, simple clean background, digital art" },
+    { key: "photo", emoji: "📷", label: "Photo Real",
+      suffix: ", photorealistic, natural lighting, high quality photograph, high detail" },
+    { key: "watercolor", emoji: "🖌️", label: "Watercolor",
+      suffix: ", soft watercolor painting, pastel colors, gentle brush strokes, artistic" },
+    { key: "crayon", emoji: "🖍️", label: "Crayon",
+      suffix: ", cheerful crayon drawing, colorful, child-like art style" },
+    { key: "pixel", emoji: "🕹️", label: "Pixel Art",
+      suffix: ", retro pixel art, 8-bit video game style, vibrant colors" },
+    { key: "claymation", emoji: "🧶", label: "Claymation",
+      suffix: ", claymation style, clay figures, stop-motion animation look" },
+    { key: "sketch", emoji: "✏️", label: "Sketch",
+      suffix: ", colored pencil sketch, hand-drawn, artistic linework" }
+  ];
+
+  function pollinationsUrl(fullPrompt, w, h, seed){
     return "https://image.pollinations.ai/prompt/" + encodeURIComponent(fullPrompt) +
       "?width=" + w + "&height=" + h + "&seed=" + seed +
       "&model=flux&safe=true&nologo=true&referrer=sambayford-jigsaw-puzzle";
@@ -456,9 +480,12 @@
   // always has a concrete value (defaults to "easy") since randomizing
   // piece count by surprise isn't as desirable as randomizing subject
   // matter — a parent picking "Easy" for a toddler shouldn't risk getting
-  // a 25-piece puzzle.
+  // a 25-piece puzzle. selectedStyleKey defaults to "cartoon" for the
+  // same reason, but (unlike size) still allows "surprise" as an option
+  // since a style swap doesn't change how hard the puzzle is.
   let selectedObjectKey = null;
   let selectedPlaceKey = null;
+  let selectedStyleKey = "cartoon";
   let selectedSizeKey = "easy";
 
   function resolveObjectPrompt(){
@@ -476,8 +503,15 @@
     return item.phrase;
   }
 
+  function resolveStyleSuffix(){
+    const item = selectedStyleKey
+      ? STYLES.find(s => s.key === selectedStyleKey)
+      : STYLES[Math.floor(Math.random() * STYLES.length)];
+    return item.suffix;
+  }
+
   function randomGeneratedImageUrl(boardW, boardH){
-    const prompt = resolveObjectPrompt() + " " + resolvePlacePhrase();
+    const prompt = resolveObjectPrompt() + " " + resolvePlacePhrase() + resolveStyleSuffix();
     const seed = Math.floor(Math.random() * 1e9);
     const reqW = Math.max(boardW * 2, 640);
     const reqH = Math.max(boardH * 2, 480);
@@ -541,6 +575,8 @@
       () => selectedObjectKey, (k) => { selectedObjectKey = k; });
     buildCarousel(document.getElementById("place-carousel"), PLACES, true,
       () => selectedPlaceKey, (k) => { selectedPlaceKey = k; });
+    buildCarousel(document.getElementById("style-carousel"), STYLES, true,
+      () => selectedStyleKey, (k) => { selectedStyleKey = k; });
     buildCarousel(document.getElementById("size-carousel"), SIZE_ITEMS, false,
       () => selectedSizeKey, (k) => { selectedSizeKey = k; });
   }
@@ -898,9 +934,10 @@
       });
 
       const snapshot = {
-        v: 2,
+        v: 3,
         objectKey: selectedObjectKey,
         placeKey: selectedPlaceKey,
+        styleKey: selectedStyleKey,
         difficulty: currentDifficulty,
         rows: state.rows, cols: state.cols,
         boardW: state.boardW, boardH: state.boardH,
@@ -1156,6 +1193,7 @@
     if (savedLooksValid){
       selectedObjectKey = saved.objectKey || null;
       selectedPlaceKey = saved.placeKey || null;
+      selectedStyleKey = saved.styleKey || "cartoon";
       selectedSizeKey = saved.difficulty || "easy";
       currentDifficulty = selectedSizeKey;
       buildCarousels();
