@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Puzzle Pieces — A Jigsaw Puzzle for Kids</title>
-<meta name="description" content="A friendly jigsaw puzzle game for kids with AI-generated pictures of animals, desserts, and fairies.">
+<meta name="description" content="A friendly jigsaw puzzle game for kids with AI-generated pictures — pick who and where!">
 <meta name="theme-color" content="#3AA6E0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -70,50 +70,55 @@
   header p{ margin:0; color:var(--ink-soft); font-weight:600; font-size:0.95rem; }
 
   /* ---------- setup screen ---------- */
-  #setup-screen{ align-items:center; justify-content:center; gap:22px; position:relative; z-index:1; }
-  .diff-grid{ display:flex; flex-direction:column; gap:16px; width:100%; max-width:340px; }
+  #setup-screen{ align-items:center; justify-content:center; gap:18px; position:relative; z-index:1; }
   .stat-pill{
     background:var(--card); border-radius:999px; padding:8px 16px; font-weight:700;
     box-shadow:var(--shadow); font-size:0.9rem; color:var(--ink-soft);
   }
 
-  /* ---------- category picker ---------- */
-  .category-section{ width:100%; max-width:420px; }
+  /* ---------- carousels (who / where / size) ---------- */
+  .carousel-section{ width:100%; max-width:420px; }
   .section-label{
     margin:0 0 8px 4px; font-weight:700; color:var(--ink-soft); font-size:0.85rem;
     text-transform:uppercase; letter-spacing:0.04em;
   }
-  #category-strip{
+  .carousel-strip{
     display:flex; gap:10px; overflow-x:auto; padding:4px 4px 10px;
     scroll-snap-type:x proximity;
   }
-  .category-tile{
+  .carousel-tile{
     scroll-snap-align:start;
     flex:0 0 auto;
     display:flex; flex-direction:column; align-items:center; gap:6px;
     width:76px;
     border:none; background:transparent; cursor:pointer; padding:0;
   }
-  .category-tile .thumb{
+  .carousel-tile .tile-face{
     width:64px; height:64px; border-radius:16px; background:var(--card);
-    box-shadow:var(--shadow); overflow:hidden; display:flex; align-items:center; justify-content:center;
+    box-shadow:var(--shadow); display:flex; align-items:center; justify-content:center;
     border:3px solid transparent; transition:transform 0.12s ease, border-color 0.12s ease;
+    font-size:1.9rem; line-height:1;
   }
-  .category-tile .thumb img{ width:100%; height:100%; display:block; }
-  .category-tile span{
+  .carousel-tile .tile-face.surprise{ background:linear-gradient(135deg,#FFD166,#FF6B6B); }
+  .carousel-tile span{
     font-size:0.72rem; font-weight:700; color:var(--ink-soft); text-align:center; line-height:1.15;
   }
-  .category-tile.selected .thumb{
+  .carousel-tile small{
+    font-size:0.62rem; font-weight:600; color:var(--ink-soft); opacity:0.8;
+  }
+  .carousel-tile.selected .tile-face{
     border-color:var(--easy);
     box-shadow:var(--shadow), 0 0 0 2px rgba(6,214,160,0.35);
     transform:translateY(-2px);
   }
-  .category-tile.selected span{ color:var(--ink); }
-  .category-tile:active .thumb{ transform:translateY(2px); }
-  .category-tile .thumb.surprise{
-    background:linear-gradient(135deg,#FFD166,#FF6B6B);
-    font-size:1.6rem;
-  }
+  .carousel-tile.selected span{ color:var(--ink); }
+  .carousel-tile:active .tile-face{ transform:translateY(2px); }
+  /* size tiles get a colored face matching their difficulty, like the old buttons */
+  .carousel-tile .tile-face.size-easy{ background:var(--easy); }
+  .carousel-tile .tile-face.size-medium{ background:var(--medium); }
+  .carousel-tile .tile-face.size-hard{ background:var(--hard); }
+
+  .start-btn{ width:100%; max-width:340px; text-align:center; align-items:center; }
 
   /* Signature element: buttons shaped like real jigsaw pieces via a knob bump */
   .piece-btn{
@@ -287,22 +292,24 @@
   <div id="setup-screen" class="screen">
     <div class="stat-pill" id="stat-pill">🏆 0 puzzles solved</div>
 
-    <div class="category-section">
-      <p class="section-label">Pick a category</p>
-      <div id="category-strip"></div>
+    <div class="carousel-section">
+      <p class="section-label">Who?</p>
+      <div id="object-carousel" class="carousel-strip"></div>
     </div>
 
-    <div class="diff-grid">
-      <button class="piece-btn easy" data-diff="easy">
-        Easy <small>9 big pieces — great for little hands</small>
-      </button>
-      <button class="piece-btn medium" data-diff="medium">
-        Medium <small>16 pieces — a fun challenge</small>
-      </button>
-      <button class="piece-btn hard" data-diff="hard">
-        Hard <small>25 pieces — for puzzle pros</small>
-      </button>
+    <div class="carousel-section">
+      <p class="section-label">Where?</p>
+      <div id="place-carousel" class="carousel-strip"></div>
     </div>
+
+    <div class="carousel-section">
+      <p class="section-label">How big?</p>
+      <div id="size-carousel" class="carousel-strip"></div>
+    </div>
+
+    <button id="start-puzzle-btn" class="piece-btn easy start-btn">
+      Start Puzzle! 🧩
+    </button>
   </div>
 
   <!-- LOADING -->
@@ -331,7 +338,7 @@
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
         <button class="hud-btn" id="toggle-ghost-btn">🙈 Hide picture</button>
         <button class="hud-btn" id="new-puzzle-btn">🔄 New</button>
-        <button class="hud-btn" id="change-diff-btn">↩️ Categories</button>
+        <button class="hud-btn" id="change-diff-btn">↩️ Start Over</button>
       </div>
     </div>
     <div id="board-wrap">
@@ -352,7 +359,7 @@
     <div id="celebrate-canvas-wrap"></div>
     <div class="cta-row">
       <button class="piece-btn easy" id="play-again-btn" style="padding:14px 22px;">Play Again</button>
-      <button class="piece-btn medium" id="celebrate-levels-btn" style="padding:14px 22px;">Change Category</button>
+      <button class="piece-btn medium" id="celebrate-levels-btn" style="padding:14px 22px;">Pick Something New</button>
     </div>
   </div>
 
@@ -376,63 +383,66 @@
   const STATS_KEY = "jigsaw_kids_stats_v1";
 
   // Free, no-key AI image generation via Pollinations.ai
-  // (image.pollinations.ai/prompt/<prompt>). Unlike the LoremFlickr photo
-  // search this replaced, WE control every prompt — no unmoderated public
-  // photos — plus the API's own safe=true NSFW filter as a second layer
-  // (it errors out rather than returning flagged content, which our
-  // existing fallback handles gracefully). Each category rotates through
-  // several specific prompts (rather than one generic one) for variety,
-  // and STYLE_SUFFIX keeps every generation in the same cheerful
-  // storybook-illustration look regardless of subject. A random seed is
-  // appended per puzzle so the same prompt doesn't return the same image
-  // twice.
+  // (image.pollinations.ai/prompt/<prompt>). WE control every prompt — no
+  // unmoderated public photos — plus the API's own safe=true NSFW filter
+  // as a second layer (it errors out rather than returning flagged
+  // content). Rather than fixed pre-made prompts, the player builds their
+  // own combination from three independent carousels — WHO (OBJECTS),
+  // WHERE (PLACES), and SIZE — and the final prompt is just
+  // "<object phrase> <place phrase>" + STYLE_SUFFIX, which keeps every
+  // generation in the same cheerful storybook-illustration look
+  // regardless of subject. A random seed is appended per puzzle so the
+  // same combination doesn't return the same image twice.
   //
   // Anonymous (no-signup) usage notes: images may carry a small
   // Pollinations watermark (nologo requires a free account — harmless to
   // still request it, just won't take effect for us), and the anonymous
   // rate limit is roughly one request per 15s. Generation itself is also
-  // slower than a plain image lookup, so loadImage's timeout is longer
-  // here than it was for LoremFlickr/DiceBear (see loadImage below).
+  // slower than a plain image lookup — loadImage() has no timeout, it
+  // just waits (see loadImage below).
   const STYLE_SUFFIX = ", colorful children's book illustration, cheerful, simple clean background, digital art";
-  const CATEGORIES = [
-    { key: "animals", label: "Animals", icon: "🐾", prompts: [
-      "a cute fluffy puppy playing in a park",
-      "a happy baby elephant",
-      "a fluffy bunny in a meadow",
-      "a playful panda cub",
-      "a colorful parrot on a branch",
-      "a curious kitten with a ball of yarn",
-      "a baby lion cub in tall grass",
-      "a friendly dolphin jumping over waves",
-      "a fox sitting in an autumn forest",
-      "a baby giraffe under a tree",
-      "a penguin family on ice",
-      "a koala hugging a tree branch"
-    ] },
-    { key: "desserts", label: "Desserts", icon: "🍰", prompts: [
-      "a big birthday cake with candles and sprinkles",
-      "a stack of pancakes with syrup and berries",
-      "an ice cream sundae with rainbow sprinkles",
-      "a plate of colorful frosted cupcakes",
-      "a rainbow layer cake",
-      "a donut with pink frosting and sprinkles",
-      "a bowl of colorful candy",
-      "a giant chocolate chip cookie",
-      "a fruit tart with strawberries",
-      "a slice of pie with whipped cream"
-    ] },
-    { key: "fairies", label: "Fairies", icon: "🧚", prompts: [
-      "a cute fairy with sparkly wings in an enchanted forest",
-      "a tiny fairy garden with mushrooms and fireflies",
-      "a magical fairy castle in the clouds",
-      "a fairy sitting on a giant flower",
-      "a fairy with a wand casting sparkles",
-      "a woodland fairy with butterfly wings",
-      "a fairy tea party with tiny cups",
-      "a fairy flying among the stars"
-    ] }
+
+  // "animal" is a wildcard entry within the WHO carousel — rather than one
+  // fixed prompt, it picks randomly from this pool each time so "Animal"
+  // doesn't always mean the same creature.
+  const ANIMAL_PROMPTS = [
+    "a cute fluffy puppy", "a happy baby elephant", "a fluffy bunny",
+    "a playful panda cub", "a colorful parrot", "a curious kitten",
+    "a baby lion cub", "a friendly dolphin", "a fox in an autumn forest",
+    "a baby giraffe", "a penguin", "a koala hugging a tree branch"
   ];
-  const PREVIEW_SEED = 1; // fixed seed so each category thumbnail stays recognizable
+
+  const OBJECTS = [
+    { key: "child", emoji: "🧒", label: "Child", prompt: "a happy child" },
+    { key: "dog", emoji: "🐶", label: "Dog", prompt: "a cute dog" },
+    { key: "cat", emoji: "🐱", label: "Cat", prompt: "a cute cat" },
+    { key: "animal", emoji: "🦁", label: "Animal" }, // prompt resolved from ANIMAL_PROMPTS at generation time
+    { key: "fairy", emoji: "🧚", label: "Fairy", prompt: "a cute fairy with sparkly wings" },
+    { key: "unicorn", emoji: "🦄", label: "Unicorn", prompt: "a magical unicorn" },
+    { key: "dinosaur", emoji: "🦕", label: "Dinosaur", prompt: "a friendly cartoon dinosaur" },
+    { key: "robot", emoji: "🤖", label: "Robot", prompt: "a cute friendly robot" },
+    { key: "princess", emoji: "👸", label: "Princess", prompt: "a princess in a beautiful dress" },
+    { key: "dragon", emoji: "🐉", label: "Dragon", prompt: "a friendly cartoon dragon" },
+    { key: "mermaid", emoji: "🧜", label: "Mermaid", prompt: "a mermaid with a colorful tail" },
+    { key: "cake", emoji: "🎂", label: "Cake", prompt: "a big birthday cake with candles" },
+    { key: "car", emoji: "🚗", label: "Car", prompt: "a cute cartoon car" },
+    { key: "train", emoji: "🚂", label: "Train", prompt: "a colorful cartoon train" }
+  ];
+
+  const PLACES = [
+    { key: "home", emoji: "🏠", label: "Home", phrase: "at home" },
+    { key: "city", emoji: "🏙️", label: "City", phrase: "in a bustling city" },
+    { key: "forest", emoji: "🌲", label: "Forest", phrase: "in an enchanted forest" },
+    { key: "sky", emoji: "☁️", label: "Sky", phrase: "flying through a sunny sky with clouds" },
+    { key: "school", emoji: "🏫", label: "School", phrase: "at school" },
+    { key: "beach", emoji: "🏖️", label: "Beach", phrase: "on a sunny beach" },
+    { key: "castle", emoji: "🏰", label: "Castle", phrase: "in a magical castle" },
+    { key: "space", emoji: "🚀", label: "Space", phrase: "floating in outer space among stars" },
+    { key: "ocean", emoji: "🌊", label: "Ocean", phrase: "swimming under the ocean" },
+    { key: "garden", emoji: "🌈", label: "Garden", phrase: "in a rainbow flower garden" },
+    { key: "winter", emoji: "❄️", label: "Winter", phrase: "in a snowy winter wonderland" },
+    { key: "circus", emoji: "🎪", label: "Circus", phrase: "at a fun circus" }
+  ];
 
   function pollinationsUrl(prompt, w, h, seed){
     const fullPrompt = prompt + STYLE_SUFFIX;
@@ -441,65 +451,98 @@
       "&model=flux&safe=true&nologo=true&referrer=sambayford-jigsaw-puzzle";
   }
 
-  // selectedCategoryKey: null means "surprise me" — a random category
-  // (and prompt within it) picked fresh every puzzle. Otherwise it's one
-  // of CATEGORIES[i].key, chosen by the player on the setup screen.
-  let selectedCategoryKey = null;
+  // selectedObjectKey / selectedPlaceKey: null means "surprise me" — a
+  // random pick from that carousel, fresh every puzzle. selectedSizeKey
+  // always has a concrete value (defaults to "easy") since randomizing
+  // piece count by surprise isn't as desirable as randomizing subject
+  // matter — a parent picking "Easy" for a toddler shouldn't risk getting
+  // a 25-piece puzzle.
+  let selectedObjectKey = null;
+  let selectedPlaceKey = null;
+  let selectedSizeKey = "easy";
+
+  function resolveObjectPrompt(){
+    const item = selectedObjectKey
+      ? OBJECTS.find(o => o.key === selectedObjectKey)
+      : OBJECTS[Math.floor(Math.random() * OBJECTS.length)];
+    if (item.key === "animal") return ANIMAL_PROMPTS[Math.floor(Math.random() * ANIMAL_PROMPTS.length)];
+    return item.prompt;
+  }
+
+  function resolvePlacePhrase(){
+    const item = selectedPlaceKey
+      ? PLACES.find(p => p.key === selectedPlaceKey)
+      : PLACES[Math.floor(Math.random() * PLACES.length)];
+    return item.phrase;
+  }
 
   function randomGeneratedImageUrl(boardW, boardH){
-    const category = selectedCategoryKey
-      ? CATEGORIES.find(c => c.key === selectedCategoryKey)
-      : CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-    const prompt = category.prompts[Math.floor(Math.random() * category.prompts.length)];
+    const prompt = resolveObjectPrompt() + " " + resolvePlacePhrase();
     const seed = Math.floor(Math.random() * 1e9);
     const reqW = Math.max(boardW * 2, 640);
     const reqH = Math.max(boardH * 2, 480);
     return pollinationsUrl(prompt, reqW, reqH, seed);
   }
 
-  function buildCategoryStrip(){
-    const strip = document.getElementById("category-strip");
-    strip.innerHTML = "";
+  // ---------------------------------------------------------------------
+  // Generic carousel builder, reused for all three pickers (WHO / WHERE /
+  // SIZE). Items show a big emoji "face" rather than a fetched thumbnail
+  // — instant to render, no network round-trip just to draw the setup
+  // screen. allowSurprise adds a "🎲 Surprise" tile as the first option
+  // (used for object/place, not size). getSelected/setSelected read and
+  // write whichever module-level selection variable this carousel
+  // controls, so buildCarousel stays agnostic of which one it is.
+  // ---------------------------------------------------------------------
+  function buildCarousel(stripEl, items, allowSurprise, getSelected, setSelected){
+    stripEl.innerHTML = "";
 
     function selectTile(tile, key){
-      strip.querySelectorAll(".category-tile").forEach(t => t.classList.remove("selected"));
+      stripEl.querySelectorAll(".carousel-tile").forEach(t => t.classList.remove("selected"));
       tile.classList.add("selected");
-      selectedCategoryKey = key;
+      setSelected(key);
     }
 
-    const surpriseTile = document.createElement("button");
-    surpriseTile.className = "category-tile";
-    surpriseTile.innerHTML = '<span class="thumb surprise">🎲</span><span>Surprise Me</span>';
-    surpriseTile.addEventListener("click", () => selectTile(surpriseTile, null));
-    strip.appendChild(surpriseTile);
+    let surpriseTile = null;
+    if (allowSurprise){
+      surpriseTile = document.createElement("button");
+      surpriseTile.className = "carousel-tile";
+      surpriseTile.innerHTML = '<span class="tile-face surprise">🎲</span><span>Surprise</span>';
+      surpriseTile.addEventListener("click", () => selectTile(surpriseTile, null));
+      stripEl.appendChild(surpriseTile);
+    }
 
     const tilesByKey = {};
-    CATEGORIES.forEach(cat => {
+    items.forEach(item => {
       const tile = document.createElement("button");
-      tile.className = "category-tile";
-      const img = document.createElement("img");
-      img.src = pollinationsUrl(cat.prompts[0], 96, 96, PREVIEW_SEED);
-      img.alt = cat.label;
-      img.loading = "lazy";
-      const thumb = document.createElement("span");
-      thumb.className = "thumb";
-      thumb.appendChild(img);
-      const label = document.createElement("span");
-      label.textContent = cat.icon + " " + cat.label;
-      tile.appendChild(thumb);
-      tile.appendChild(label);
-      tile.addEventListener("click", () => selectTile(tile, cat.key));
-      strip.appendChild(tile);
-      tilesByKey[cat.key] = tile;
+      tile.className = "carousel-tile";
+      const faceClass = item.faceClass ? " " + item.faceClass : "";
+      tile.innerHTML =
+        '<span class="tile-face' + faceClass + '">' + item.emoji + '</span>' +
+        '<span>' + item.label + '</span>' +
+        (item.sub ? '<small>' + item.sub + '</small>' : '');
+      tile.addEventListener("click", () => selectTile(tile, item.key));
+      stripEl.appendChild(tile);
+      tilesByKey[item.key] = tile;
     });
 
-    // Reflect whatever selectedCategoryKey already is (e.g. restored from
-    // a saved in-progress puzzle) rather than always defaulting to
-    // Surprise Me — this only matters cosmetically once the player
-    // navigates back to this screen, since a restore skips straight to
-    // the game screen.
-    (selectedCategoryKey && tilesByKey[selectedCategoryKey] ? tilesByKey[selectedCategoryKey] : surpriseTile)
-      .classList.add("selected");
+    const current = getSelected();
+    const toSelect = (current && tilesByKey[current]) ? tilesByKey[current] : (surpriseTile || stripEl.firstChild);
+    if (toSelect) toSelect.classList.add("selected");
+  }
+
+  const SIZE_ITEMS = [
+    { key: "easy", emoji: "🟢", label: "Easy", sub: "9 pieces", faceClass: "size-easy" },
+    { key: "medium", emoji: "🟡", label: "Medium", sub: "16 pieces", faceClass: "size-medium" },
+    { key: "hard", emoji: "🔴", label: "Hard", sub: "25 pieces", faceClass: "size-hard" }
+  ];
+
+  function buildCarousels(){
+    buildCarousel(document.getElementById("object-carousel"), OBJECTS, true,
+      () => selectedObjectKey, (k) => { selectedObjectKey = k; });
+    buildCarousel(document.getElementById("place-carousel"), PLACES, true,
+      () => selectedPlaceKey, (k) => { selectedPlaceKey = k; });
+    buildCarousel(document.getElementById("size-carousel"), SIZE_ITEMS, false,
+      () => selectedSizeKey, (k) => { selectedSizeKey = k; });
   }
 
   // ---------------------------------------------------------------------
@@ -829,7 +872,7 @@
   // of this file, but also covers a plain manual browser refresh or the
   // OS reloading a backgrounded tab.
   //
-  // What's saved: the category/difficulty, the exact generated-image URL
+  // What's saved: the object/place/difficulty selections, the exact generated-image URL
   // (same seed => Pollinations returns the same picture), the signH/signV
   // tab-layout arrays (so regenerated piece shapes match exactly), and
   // per-piece status — locked (on the board), loose (dropped somewhere,
@@ -855,8 +898,9 @@
       });
 
       const snapshot = {
-        v: 1,
-        category: selectedCategoryKey,
+        v: 2,
+        objectKey: selectedObjectKey,
+        placeKey: selectedPlaceKey,
         difficulty: currentDifficulty,
         rows: state.rows, cols: state.cols,
         boardW: state.boardW, boardH: state.boardH,
@@ -1053,9 +1097,7 @@
   // ---------------------------------------------------------------------
   // Event wiring
   // ---------------------------------------------------------------------
-  document.querySelectorAll(".piece-btn[data-diff]").forEach(btn => {
-    btn.addEventListener("click", () => startPuzzle(btn.dataset.diff));
-  });
+  document.getElementById("start-puzzle-btn").addEventListener("click", () => startPuzzle(selectedSizeKey));
   document.getElementById("retry-btn").addEventListener("click", () => startPuzzle(currentDifficulty));
   document.getElementById("new-puzzle-btn").addEventListener("click", () => startPuzzle(currentDifficulty));
   document.getElementById("change-diff-btn").addEventListener("click", () => {
@@ -1112,9 +1154,11 @@
       saved.boardW && saved.boardH && saved.signH && saved.signV && Array.isArray(saved.pieces);
 
     if (savedLooksValid){
-      selectedCategoryKey = saved.category || null;
-      currentDifficulty = saved.difficulty || "easy";
-      buildCategoryStrip();
+      selectedObjectKey = saved.objectKey || null;
+      selectedPlaceKey = saved.placeKey || null;
+      selectedSizeKey = saved.difficulty || "easy";
+      currentDifficulty = selectedSizeKey;
+      buildCarousels();
       document.getElementById("loading-title").textContent = "Picking up where you left off…";
       showScreen("loading");
       try {
@@ -1128,7 +1172,7 @@
         clearProgress();
       }
     } else {
-      buildCategoryStrip();
+      buildCarousels();
     }
     showScreen("setup");
   }
