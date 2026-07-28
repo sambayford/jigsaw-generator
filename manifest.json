@@ -1,6 +1,6 @@
 {
-  "name": "Puzzle Pieces — Jigsaw for Kids",
-  "short_name": "Puzzle Pieces",
+  "name": "Jigsaw Generator — AI Jigsaw Puzzles for Kids",
+  "short_name": "Jigsaw Generator",
   "description": "A friendly jigsaw puzzle game for kids with AI-generated pictures — pick who and where",
   "start_url": "/jigsaw-puzzle/",
   "scope": "/jigsaw-puzzle/",
