@@ -26,6 +26,12 @@
     --medium-dark:#E8AE2E;
     --hard:#FF6B6B;
     --hard-dark:#E2504F;
+    --expert:#9B5DE5;
+    --expert-dark:#7A3FC4;
+    --master:#4EA8DE;
+    --master-dark:#2E86C1;
+    --genius:#F72585;
+    --genius-dark:#D6127A;
     --card:#FFFFFF;
     --panel:#F3FAFF;
     --shadow: 0 6px 0 rgba(27,42,74,0.18);
@@ -117,6 +123,9 @@
   .carousel-tile .tile-face.size-easy{ background:var(--easy); }
   .carousel-tile .tile-face.size-medium{ background:var(--medium); }
   .carousel-tile .tile-face.size-hard{ background:var(--hard); }
+  .carousel-tile .tile-face.size-expert{ background:var(--expert); }
+  .carousel-tile .tile-face.size-master{ background:var(--master); }
+  .carousel-tile .tile-face.size-genius{ background:var(--genius); }
 
   .start-btn{ width:100%; max-width:340px; text-align:center; align-items:center; }
 
@@ -383,7 +392,10 @@
   const DIFFICULTIES = {
     easy:   { rows:3, cols:3, label:"Easy",   total:9  },
     medium: { rows:4, cols:4, label:"Medium", total:16 },
-    hard:   { rows:5, cols:5, label:"Hard",   total:25 }
+    hard:   { rows:5, cols:5, label:"Hard",   total:25 },
+    expert: { rows:6, cols:6, label:"Expert", total:36 },
+    master: { rows:7, cols:7, label:"Master", total:49 },
+    genius: { rows:8, cols:8, label:"Genius", total:64 }
   };
   const STATS_KEY = "jigsaw_kids_stats_v1";
 
@@ -567,7 +579,10 @@
   const SIZE_ITEMS = [
     { key: "easy", emoji: "🟢", label: "Easy", sub: "9 pieces", faceClass: "size-easy" },
     { key: "medium", emoji: "🟡", label: "Medium", sub: "16 pieces", faceClass: "size-medium" },
-    { key: "hard", emoji: "🔴", label: "Hard", sub: "25 pieces", faceClass: "size-hard" }
+    { key: "hard", emoji: "🔴", label: "Hard", sub: "25 pieces", faceClass: "size-hard" },
+    { key: "expert", emoji: "🟣", label: "Expert", sub: "36 pieces", faceClass: "size-expert" },
+    { key: "master", emoji: "🔵", label: "Master", sub: "49 pieces", faceClass: "size-master" },
+    { key: "genius", emoji: "⭐", label: "Genius", sub: "64 pieces", faceClass: "size-genius" }
   ];
 
   function buildCarousels(){
