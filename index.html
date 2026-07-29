@@ -84,6 +84,15 @@
 
   /* ---------- carousels (who / where / size) ---------- */
   .carousel-section{ width:100%; max-width:420px; }
+  .custom-input{
+    width:100%; box-sizing:border-box; margin-top:2px;
+    padding:10px 14px; border-radius:12px; border:2px solid #DCEEFA;
+    font-family:'Quicksand',sans-serif; font-size:0.9rem; color:var(--ink);
+    background:var(--card);
+  }
+  .custom-input:focus{ outline:none; border-color:var(--easy); }
+  .custom-input.hidden{ display:none; }
+  .carousel-tile .tile-face.custom{ background:var(--card); border:2px dashed #9FB7CC; font-size:1.4rem; }
   .section-label{
     margin:0 0 8px 4px; font-weight:700; color:var(--ink-soft); font-size:0.85rem;
     text-transform:uppercase; letter-spacing:0.04em;
@@ -304,21 +313,29 @@
     <div class="carousel-section">
       <p class="section-label">Who?</p>
       <div id="object-carousel" class="carousel-strip"></div>
+      <input type="text" id="object-custom-input" class="custom-input hidden"
+        placeholder="Type who you want… e.g. a friendly octopus" maxlength="60">
     </div>
 
     <div class="carousel-section">
       <p class="section-label">Where?</p>
       <div id="place-carousel" class="carousel-strip"></div>
+      <input type="text" id="place-custom-input" class="custom-input hidden"
+        placeholder="Type where… e.g. on a rainbow" maxlength="60">
     </div>
 
     <div class="carousel-section">
       <p class="section-label">What style?</p>
       <div id="style-carousel" class="carousel-strip"></div>
+      <input type="text" id="style-custom-input" class="custom-input hidden"
+        placeholder="Type a style… e.g. stained glass" maxlength="60">
     </div>
 
     <div class="carousel-section">
       <p class="section-label">How big?</p>
       <div id="size-carousel" class="carousel-strip"></div>
+      <input type="number" id="size-custom-input" class="custom-input hidden"
+        placeholder="How many pieces? (4–120)" min="4" max="120" inputmode="numeric">
     </div>
 
     <button id="start-puzzle-btn" class="piece-btn easy start-btn">
@@ -495,31 +512,77 @@
   // a 25-piece puzzle. selectedStyleKey defaults to "cartoon" for the
   // same reason, but (unlike size) still allows "surprise" as an option
   // since a style swap doesn't change how hard the puzzle is.
+  //
+  // Any of the four can also be "custom", in which case the matching
+  // customObjectText/customPlaceText/customStyleText/customSizeCount
+  // holds whatever the player typed. IMPORTANT: this is the one place a
+  // player can put arbitrary free text into the image prompt — every
+  // other object/place/style value above is a fixed phrase we wrote.
+  // safe=true (Pollinations' own NSFW filter) is the backstop for this,
+  // plus the short maxlength on the inputs; it isn't a guarantee, just a
+  // second layer, so don't remove safe=true if this ever gets refactored.
   let selectedObjectKey = null;
   let selectedPlaceKey = null;
   let selectedStyleKey = "cartoon";
   let selectedSizeKey = "easy";
+  let customObjectText = "";
+  let customPlaceText = "";
+  let customStyleText = "";
+  let customSizeCount = "";
+
+  function randomObjectPromptFromPool(){
+    const item = OBJECTS[Math.floor(Math.random() * OBJECTS.length)];
+    return item.key === "animal" ? ANIMAL_PROMPTS[Math.floor(Math.random() * ANIMAL_PROMPTS.length)] : item.prompt;
+  }
+  function randomPlacePhraseFromPool(){
+    return PLACES[Math.floor(Math.random() * PLACES.length)].phrase;
+  }
+  function randomStyleSuffixFromPool(){
+    return STYLES[Math.floor(Math.random() * STYLES.length)].suffix;
+  }
 
   function resolveObjectPrompt(){
-    const item = selectedObjectKey
-      ? OBJECTS.find(o => o.key === selectedObjectKey)
-      : OBJECTS[Math.floor(Math.random() * OBJECTS.length)];
-    if (item.key === "animal") return ANIMAL_PROMPTS[Math.floor(Math.random() * ANIMAL_PROMPTS.length)];
-    return item.prompt;
+    if (selectedObjectKey === "custom"){
+      const text = customObjectText.trim();
+      return text || randomObjectPromptFromPool(); // empty box = treat like surprise
+    }
+    if (!selectedObjectKey) return randomObjectPromptFromPool(); // surprise
+    const item = OBJECTS.find(o => o.key === selectedObjectKey);
+    return item.key === "animal" ? ANIMAL_PROMPTS[Math.floor(Math.random() * ANIMAL_PROMPTS.length)] : item.prompt;
   }
 
   function resolvePlacePhrase(){
-    const item = selectedPlaceKey
-      ? PLACES.find(p => p.key === selectedPlaceKey)
-      : PLACES[Math.floor(Math.random() * PLACES.length)];
-    return item.phrase;
+    if (selectedPlaceKey === "custom"){
+      const text = customPlaceText.trim();
+      return text || randomPlacePhraseFromPool();
+    }
+    if (!selectedPlaceKey) return randomPlacePhraseFromPool();
+    return PLACES.find(p => p.key === selectedPlaceKey).phrase;
   }
 
   function resolveStyleSuffix(){
-    const item = selectedStyleKey
-      ? STYLES.find(s => s.key === selectedStyleKey)
-      : STYLES[Math.floor(Math.random() * STYLES.length)];
-    return item.suffix;
+    if (selectedStyleKey === "custom"){
+      const text = customStyleText.trim();
+      if (!text) return randomStyleSuffixFromPool();
+      return text.startsWith(",") ? text : (", " + text);
+    }
+    if (!selectedStyleKey) return randomStyleSuffixFromPool();
+    return STYLES.find(s => s.key === selectedStyleKey).suffix;
+  }
+
+  // Turns a requested total piece count into a rows×cols grid that's
+  // close to that total while staying roughly the board's 4:3 aspect
+  // (so pieces come out close to square rather than badly stretched).
+  function resolveDifficulty(key){
+    if (key === "custom"){
+      let n = parseInt(customSizeCount, 10);
+      if (!n || isNaN(n)) n = 9; // empty/invalid = fall back to Easy's count
+      n = Math.max(4, Math.min(120, n));
+      const cols = Math.max(2, Math.round(Math.sqrt(n * 4 / 3)));
+      const rows = Math.max(2, Math.round(n / cols));
+      return { rows, cols, label: "Custom", total: rows * cols };
+    }
+    return DIFFICULTIES[key] || DIFFICULTIES.easy;
   }
 
   function randomGeneratedImageUrl(boardW, boardH){
@@ -531,21 +594,33 @@
   }
 
   // ---------------------------------------------------------------------
-  // Generic carousel builder, reused for all three pickers (WHO / WHERE /
-  // SIZE). Items show a big emoji "face" rather than a fetched thumbnail
-  // — instant to render, no network round-trip just to draw the setup
-  // screen. allowSurprise adds a "🎲 Surprise" tile as the first option
-  // (used for object/place, not size). getSelected/setSelected read and
-  // write whichever module-level selection variable this carousel
-  // controls, so buildCarousel stays agnostic of which one it is.
+  // Generic carousel builder, reused for all four pickers (WHO / WHERE /
+  // STYLE / SIZE). Items show a big emoji "face" rather than a fetched
+  // thumbnail — instant to render, no network round-trip just to draw the
+  // setup screen. allowSurprise adds a "🎲 Surprise" tile as the first
+  // option. customConfig (optional) adds a "✏️ Custom" tile at the END of
+  // the strip — selecting it reveals customConfig.inputEl (a sibling
+  // <input> already in the DOM, toggled via a "hidden" class rather than
+  // created/destroyed, so its value and any focus/typing state survive a
+  // rebuild) and keeps it in sync with customConfig.get()/set(), whichever
+  // module-level custom-text variable this carousel controls.
   // ---------------------------------------------------------------------
-  function buildCarousel(stripEl, items, allowSurprise, getSelected, setSelected){
+  function buildCarousel(stripEl, items, allowSurprise, getSelected, setSelected, customConfig){
     stripEl.innerHTML = "";
+
+    function syncCustomInput(selectedKey){
+      if (!customConfig) return;
+      const isCustom = selectedKey === "custom";
+      customConfig.inputEl.classList.toggle("hidden", !isCustom);
+      if (isCustom) customConfig.inputEl.value = customConfig.get();
+    }
 
     function selectTile(tile, key){
       stripEl.querySelectorAll(".carousel-tile").forEach(t => t.classList.remove("selected"));
       tile.classList.add("selected");
       setSelected(key);
+      syncCustomInput(key);
+      if (key === "custom") customConfig.inputEl.focus();
     }
 
     let surpriseTile = null;
@@ -571,9 +646,19 @@
       tilesByKey[item.key] = tile;
     });
 
+    if (customConfig){
+      const tile = document.createElement("button");
+      tile.className = "carousel-tile";
+      tile.innerHTML = '<span class="tile-face custom">✏️</span><span>Custom</span>';
+      tile.addEventListener("click", () => selectTile(tile, "custom"));
+      stripEl.appendChild(tile);
+      tilesByKey["custom"] = tile;
+    }
+
     const current = getSelected();
     const toSelect = (current && tilesByKey[current]) ? tilesByKey[current] : (surpriseTile || stripEl.firstChild);
     if (toSelect) toSelect.classList.add("selected");
+    syncCustomInput(current);
   }
 
   const SIZE_ITEMS = [
@@ -587,13 +672,17 @@
 
   function buildCarousels(){
     buildCarousel(document.getElementById("object-carousel"), OBJECTS, true,
-      () => selectedObjectKey, (k) => { selectedObjectKey = k; });
+      () => selectedObjectKey, (k) => { selectedObjectKey = k; },
+      { inputEl: document.getElementById("object-custom-input"), get: () => customObjectText });
     buildCarousel(document.getElementById("place-carousel"), PLACES, true,
-      () => selectedPlaceKey, (k) => { selectedPlaceKey = k; });
+      () => selectedPlaceKey, (k) => { selectedPlaceKey = k; },
+      { inputEl: document.getElementById("place-custom-input"), get: () => customPlaceText });
     buildCarousel(document.getElementById("style-carousel"), STYLES, true,
-      () => selectedStyleKey, (k) => { selectedStyleKey = k; });
+      () => selectedStyleKey, (k) => { selectedStyleKey = k; },
+      { inputEl: document.getElementById("style-custom-input"), get: () => customStyleText });
     buildCarousel(document.getElementById("size-carousel"), SIZE_ITEMS, false,
-      () => selectedSizeKey, (k) => { selectedSizeKey = k; });
+      () => selectedSizeKey, (k) => { selectedSizeKey = k; },
+      { inputEl: document.getElementById("size-custom-input"), get: () => customSizeCount });
   }
 
   // ---------------------------------------------------------------------
@@ -949,10 +1038,11 @@
       });
 
       const snapshot = {
-        v: 3,
+        v: 4,
         objectKey: selectedObjectKey,
         placeKey: selectedPlaceKey,
         styleKey: selectedStyleKey,
+        customObjectText, customPlaceText, customStyleText, customSizeCount,
         difficulty: currentDifficulty,
         rows: state.rows, cols: state.cols,
         boardW: state.boardW, boardH: state.boardH,
@@ -1100,7 +1190,7 @@
     cleanupGame();
     showScreen("loading");
 
-    const { rows, cols } = DIFFICULTIES[diffKey];
+    const { rows, cols } = resolveDifficulty(diffKey);
     const { w: boardW, h: boardH } = computeBoardSize();
     const url = randomGeneratedImageUrl(boardW, boardH);
 
@@ -1115,7 +1205,7 @@
 
   function celebrate(){
     clearProgress();
-    const label = DIFFICULTIES[currentDifficulty].label;
+    const label = resolveDifficulty(currentDifficulty).label;
     document.getElementById("celebrate-sub").textContent =
       label + " puzzle complete — " + state.total + " pieces!";
 
@@ -1150,6 +1240,11 @@
   // Event wiring
   // ---------------------------------------------------------------------
   document.getElementById("start-puzzle-btn").addEventListener("click", () => startPuzzle(selectedSizeKey));
+
+  document.getElementById("object-custom-input").addEventListener("input", (e) => { customObjectText = e.target.value; });
+  document.getElementById("place-custom-input").addEventListener("input", (e) => { customPlaceText = e.target.value; });
+  document.getElementById("style-custom-input").addEventListener("input", (e) => { customStyleText = e.target.value; });
+  document.getElementById("size-custom-input").addEventListener("input", (e) => { customSizeCount = e.target.value; });
   document.getElementById("retry-btn").addEventListener("click", () => startPuzzle(currentDifficulty));
   document.getElementById("new-puzzle-btn").addEventListener("click", () => startPuzzle(currentDifficulty));
   document.getElementById("change-diff-btn").addEventListener("click", () => {
@@ -1210,6 +1305,10 @@
       selectedPlaceKey = saved.placeKey || null;
       selectedStyleKey = saved.styleKey || "cartoon";
       selectedSizeKey = saved.difficulty || "easy";
+      customObjectText = saved.customObjectText || "";
+      customPlaceText = saved.customPlaceText || "";
+      customStyleText = saved.customStyleText || "";
+      customSizeCount = saved.customSizeCount || "";
       currentDifficulty = selectedSizeKey;
       buildCarousels();
       document.getElementById("loading-title").textContent = "Picking up where you left off…";
